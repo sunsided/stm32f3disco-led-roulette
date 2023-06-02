@@ -1,16 +1,24 @@
 # STM32F3 Discovery
 
-## Setup
+The LED Roulette example on the [STM32F3 Discovery](https://www.st.com/en/evaluation-tools/stm32f3discovery.html) board,
+written in Rust.
 
-### Installation
+<div align="center">
+  <img src="docs/led-roulette.webp" alt="Moving LEDs on the STM32F3 Discovery board"/>
+</div>
+
+## Preparing the development environment
+
+### IDE setup
+
+For JetBrains CLion, use the [OpenOCD support](https://www.jetbrains.com/help/clion/openocd-support.html).
+
+### Installing the Debugger (GDB)
 
 From [here](https://docs.rust-embedded.org/discovery/f3discovery/03-setup/linux.html):
 
 ```shell
-sudo apt-get install \
-  gdb-multiarch \
-  minicom \
-  openocd
+sudo apt-get install gdb-multiarch minicom openocd
 ```
 
 Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils):
@@ -19,7 +27,7 @@ Install [cargo-binutils](https://github.com/rust-embedded/cargo-binutils):
 cargo install cargo-binutils
 ```
 
-## udev rules
+### Setting up the udev rules
 
 ```shell
 lsusb | grep ST-LINK
@@ -52,7 +60,7 @@ sudo udevadm control --reload-rules
 
 Unplug and re-plug the board if it was connected.
 
-## Verify udev rules
+#### Verifying the udev rules
 
 ```shell
 lsusb | grep -i stm
@@ -72,7 +80,7 @@ crw-rw-rw-+ 1 root plugdev 189, 282 Jun  2 18:53 /dev/bus/usb/003/027
 
 If the permissions are not `crw-rw-rw-` then the udev rules setup has failed.
 
-## Verify OpenOCD installation
+### Verify the OpenOCD installation
 
 ```shell
 openocd -f interface/stlink.cfg -f target/stm32f3x.cfg
@@ -103,7 +111,7 @@ and will flash the COM LED on the board in red and green.
 
 Also note the GDB port is `3333`; we will use this later on when we connect GDB.
 
-## Building
+### Building the project
 
 Add the `thumbv7em-none-eabihf` target:
 
@@ -155,16 +163,18 @@ ELF Header:
   Section header string table index: 20
 ```
 
-## Flashing the binary
+### Flashing the binary
 
-### Start OpenOCD
+#### Starting OpenOCD
+
+This starts OpenOCD as the GDB server:
 
 ```shell
 cd /tmp
 openocd -f interface/stlink.cfg -f target/stm32f3x.cfg
 ```
 
-### Start GDB
+#### Starting GDB
 
 ```shell
 arm-none-eabi-gdb -q -ex "target extended-remote :3333" target/thumbv7em-none-eabihf/debug/stm32f3disco-led-roulette
@@ -189,7 +199,7 @@ Info : device id = 0x10036422
 Info : flash size = 256kbytes
 ```
 
-### Flash the program
+### Flashing the program
 
 Use the `load` command in `gdb` to flash the program:
 
@@ -217,7 +227,7 @@ target halted due to debug-request, current mode: Thread
 xPSR: 0x01000000 pc: 0x08000194 msp: 0x2000a000
 ```
 
-### Debug the application
+### Debugging the application
 
 In GDB, use `break main` to break at the `main()` function:
 
@@ -296,7 +306,3 @@ Continuing.
 Breakpoint 1, main () at src/main.rs:7
 7       #[entry]
 ```
-
-## JetBrains CLion Development
-
-Use the [OpenOCD support](https://www.jetbrains.com/help/clion/openocd-support.html).
