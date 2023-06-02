@@ -296,3 +296,7 @@ Continuing.
 Breakpoint 1, main () at src/main.rs:7
 7       #[entry]
 ```
+
+## JetBrains CLion Development
+
+Use the [OpenOCD support](https://www.jetbrains.com/help/clion/openocd-support.html).
