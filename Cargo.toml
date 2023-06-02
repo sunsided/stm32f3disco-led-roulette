@@ -1,6 +1,9 @@
 [package]
 name = "stm32f3disco-led-roulette"
 version = "0.1.0"
+description = "Experiments with Rust on an STM32F3-Discovery board"
+authors = ["Markus Mayer"]
+repository = "https://github.com/sunsided/stm32f3disco-led-roulette"
 edition = "2021"
 
 [dependencies]
