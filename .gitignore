@@ -1,3 +1,5 @@
 /**/target
+/crates/**/Cargo.lock
 /.idea
 /.vscode
+/itm.txt

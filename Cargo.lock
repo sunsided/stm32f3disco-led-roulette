@@ -24,19 +24,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
-name = "aux5"
-version = "0.2.0"
-dependencies = [
- "accelerometer",
- "cortex-m",
- "cortex-m-rt",
- "lsm303dlhc",
- "panic-itm",
- "stm32f3xx-hal",
- "switch-hal",
-]
-
-[[package]]
 name = "bare-metal"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -253,6 +240,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "led-roulette-aux"
+version = "0.2.0"
+dependencies = [
+ "stm32f3-discovery",
+]
+
+[[package]]
 name = "lsm303dlhc"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -349,6 +343,12 @@ checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
 ]
+
+[[package]]
+name = "panic-halt"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de96540e0ebde571dc55c73d60ef407c653844e6f9a1e2fdbd40c07b9252d812"
 
 [[package]]
 name = "panic-itm"
@@ -467,10 +467,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "stm32f3-discovery"
+version = "0.2.0"
+dependencies = [
+ "accelerometer",
+ "cortex-m",
+ "cortex-m-rt",
+ "lsm303dlhc",
+ "panic-halt",
+ "panic-itm",
+ "stm32f3xx-hal",
+ "switch-hal",
+]
+
+[[package]]
 name = "stm32f3disco-led-roulette"
 version = "0.1.0"
 dependencies = [
- "aux5",
+ "led-roulette-aux",
+ "stm32f3-discovery",
 ]
 
 [[package]]

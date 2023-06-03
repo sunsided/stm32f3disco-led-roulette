@@ -7,6 +7,26 @@ written in Rust.
   <img src="docs/led-roulette.webp" alt="Moving LEDs on the STM32F3 Discovery board"/>
 </div>
 
+## Quickstart
+
+In a shell, start OpenOCD, e.g. by running [openocd.sh](openocd.sh):
+
+```shell
+./openocd.sh
+```
+
+In another shell, flash and run the program:
+
+```shell
+cargo run --bin stm32f3disco-led-roulette
+```
+
+In the GDB prompt, run `continue`.
+
+```gdb
+(gdb) continue
+```
+
 ## Preparing the development environment
 
 ### IDE setup

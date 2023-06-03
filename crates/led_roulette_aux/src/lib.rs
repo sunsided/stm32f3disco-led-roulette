@@ -2,22 +2,17 @@
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 #![no_std]
-#![allow(unsafe_code)]
+#![deny(unsafe_code)]
 
-pub use cortex_m_rt::entry;
-pub use panic_itm; // panic handler
-use stm32f3xx_hal::prelude::*;
-pub use stm32f3xx_hal::{
+use stm32f3_discovery::cortex_m;
+use stm32f3_discovery::leds::Leds;
+use stm32f3_discovery::stm32f3xx_hal::prelude::*;
+use stm32f3_discovery::stm32f3xx_hal::{
     delay::Delay,
     gpio::{gpioe, Output, PushPull},
-    hal::blocking::delay::DelayMs,
     pac,
 };
-pub use switch_hal::{ActiveHigh, OutputSwitch, Switch, ToggleableOutputSwitch};
-
-pub mod button;
-pub mod compass;
-pub mod leds;
+use stm32f3_discovery::switch_hal::{ActiveHigh, Switch};
 
 pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
@@ -32,7 +27,7 @@ pub fn init() -> (Delay, LedArray) {
 
     // initialize user leds
     let mut gpioe = device_periphs.GPIOE.split(&mut reset_and_clock_control.ahb);
-    let leds = leds::Leds::new(
+    let leds = Leds::new(
         gpioe.pe8,
         gpioe.pe9,
         gpioe.pe10,
@@ -46,9 +41,4 @@ pub fn init() -> (Delay, LedArray) {
     );
 
     (delay, leds.into_array())
-}
-
-/// Signals the process to go into low power mode until an interrupt occurs
-pub fn wait_for_interrupt() {
-    cortex_m::asm::wfi()
 }

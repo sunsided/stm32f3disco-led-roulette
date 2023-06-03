@@ -126,7 +126,7 @@ impl Leds {
     /// # Example
     ///
     /// ```
-    /// # use aux5::leds::Direction;
+    /// # use stm32f3_discovery::leds::Direction;
     /// let southLed = leds.for_direction(Direction::South);
     /// southLed.on().ok();
     /// ```
