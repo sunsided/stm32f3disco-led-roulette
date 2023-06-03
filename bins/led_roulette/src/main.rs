@@ -3,9 +3,9 @@
 #![deny(unsafe_code)]
 
 use led_roulette_aux::LedArray;
-use stm32f3_discovery::stm32f3xx_hal::delay::Delay;
-use stm32f3_discovery::stm32f3xx_hal::prelude::*;
-use stm32f3_discovery::{entry, OutputSwitch};
+use stm32f3_discovery::cortex_m_rt::entry;
+use stm32f3_discovery::stm32f3xx_hal::{delay::Delay, prelude::*};
+use stm32f3_discovery::switch_hal::OutputSwitch;
 
 #[entry]
 fn main() -> ! {

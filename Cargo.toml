@@ -1,7 +1,8 @@
 [workspace]
 default-members = [
     "bins/led_roulette",
-    "crates/stm32f3_discovery"
+    "crates/led_roulette_aux",
+    "crates/stm32f3_discovery",
 ]
 members = [
     "bins/*",
