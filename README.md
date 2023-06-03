@@ -9,7 +9,7 @@ written in Rust.
 
 ## Quickstart
 
-In a shell, start OpenOCD, e.g. by running [openocd.sh](openocd.sh):
+Start OpenOCD, e.g. by running [openocd.sh](openocd.sh):
 
 ```shell
 ./openocd.sh
