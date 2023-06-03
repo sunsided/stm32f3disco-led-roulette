@@ -1,4 +1,6 @@
 //! Provides access to User LEDs LD3-LD10
+
+// Original source: https://github.com/rubberduck203/stm32f3-discovery/blob/45c7f1b4375d6c4b7ab4f70d5699323d6feb98cc/src/leds.rs
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 use stm32f3xx_hal::gpio::gpioe;
@@ -64,6 +66,7 @@ pub struct Leds {
 
 impl Leds {
     /// Initializes the user LEDs to OFF
+    #[allow(clippy::too_many_arguments)]
     pub fn new<PE8Mode, PE9Mode, PE10Mode, PE11Mode, PE12Mode, PE13Mode, PE14Mode, PE15Mode>(
         pe8: gpioe::PE8<PE8Mode>,
         pe9: gpioe::PE9<PE9Mode>,

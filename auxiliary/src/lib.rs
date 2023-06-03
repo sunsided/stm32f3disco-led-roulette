@@ -6,7 +6,6 @@
 
 pub use cortex_m_rt::entry;
 pub use panic_itm; // panic handler
-use stm32f3xx_hal;
 use stm32f3xx_hal::prelude::*;
 pub use stm32f3xx_hal::{
     delay::Delay,
@@ -14,7 +13,6 @@ pub use stm32f3xx_hal::{
     hal::blocking::delay::DelayMs,
     pac,
 };
-use switch_hal;
 pub use switch_hal::{ActiveHigh, OutputSwitch, Switch, ToggleableOutputSwitch};
 
 pub mod button;

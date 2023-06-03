@@ -1,5 +1,8 @@
 //! Provides access to the user button on PA0
+
+// Original source: https://github.com/rubberduck203/stm32f3-discovery/blob/45c7f1b4375d6c4b7ab4f70d5699323d6feb98cc/src/button/mod.rs
 // SPDX-License-Identifier: MIT or Apache-2.0
+
 pub mod interrupt;
 
 use stm32f3xx_hal::gpio::gpioa::PA0;

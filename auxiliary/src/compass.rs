@@ -1,3 +1,4 @@
+// Original source: https://github.com/rubberduck203/stm32f3-discovery/blob/45c7f1b4375d6c4b7ab4f70d5699323d6feb98cc/src/compass.rs
 // SPDX-License-Identifier: MIT or Apache-2.0
 
 use accelerometer::vector::{F32x3, I16x3};
@@ -25,6 +26,7 @@ pub struct Compass {
 
 impl Compass {
     /// Initialize the onboard Lsm303dhlc e-Compass
+    #[allow(clippy::too_many_arguments)]
     pub fn new<Pb6Mode, Pb7Mode>(
         pb6: gpiob::PB6<Pb6Mode>,
         pb7: gpiob::PB7<Pb7Mode>,
@@ -44,8 +46,8 @@ impl Compass {
          * PE5 -> INT2 (configurable interrupt 2)
          * lsm303hdlc driver uses continuos mode, so no need to wait for interrupts on DRDY
          */
-        let scl = pb6.into_af4_open_drain(mode, otype, alternate_function_low);
-        let sda = pb7.into_af4_open_drain(mode, otype, alternate_function_low);
+        let scl = pb6.into_af_open_drain(mode, otype, alternate_function_low);
+        let sda = pb7.into_af_open_drain(mode, otype, alternate_function_low);
         let i2c = i2c::I2c::new(i2c1, (scl, sda), 400_000.Hz(), clocks, advanced_periph_bus);
 
         let lsm303dhlc = Lsm303::new(i2c)?;
