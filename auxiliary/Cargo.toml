@@ -4,12 +4,39 @@ authors = [
 "Christopher J. McClellan <chris.mcclellan203@gmail.com>",
 "Wink Saville <wink@saville.com",
 ]
-edition = "2021"
 name = "aux5"
 version = "0.2.0"
+edition = "2021"
+categories = ["embedded", "hardware-support", "no-std"]
+keywords = ["discovery", "stm32f3", "bsp", "arm"]
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[package.metadata.docs.rs]
+default-target = "thumbv7em-none-eabihf"
+targets = [] # build only default target for docs
 
 [dependencies]
-cortex-m = "0.7.7"
+cortex-m = "0.7.2"
 cortex-m-rt = "0.6.14"
-stm32f3-discovery = "0.7.2"
+switch-hal = "0.4.0"
+# switch-hal = { git = "https://github.com/rubberduck203/switch-hal", branch = "master" }
+lsm303dlhc = "0.2.0"
+accelerometer = "0.12.0"
+stm32f3xx-hal = { version = "0.8.0", features = ["stm32f303xc", "rt"]}
 panic-itm = "0.4.2"
+
+[dev-dependencies]
+panic-halt = "0.2.0"
+
+# # this lets you use `cargo fix`!
+# [[bin]]
+# name = "stm32f3-discovery"
+# test = false
+# bench = false
+
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
