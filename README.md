@@ -8,6 +8,9 @@ and debugging experience in JetBrains CLion while using Rust.
   <img src="docs/led-roulette.webp" alt="Moving LEDs on the STM32F3 Discovery board"/>
 </div>
 
+This project contains a copy of the code from the [stm32f3-discovery](https://github.com/rubberduck203/stm32f3-discovery) crate
+as this crate is currently outdated and appears unmaintained.
+
 ## Quickstart
 
 Start OpenOCD, e.g. by running [openocd.sh](openocd.sh):
