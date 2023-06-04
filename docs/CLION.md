@@ -47,6 +47,15 @@ e.g. to bundle debug and release builds per binary.
 |-------------------------------------------|-------------------------------------------------|-----------------------------------------------------|
 | ![Clean](clion/02-02-edit-tool-clean.png) | ![Build Debug](clion/02-02-edit-tool-debug.png) | ![Build Release](clion/02-02-edit-tool-release.png) |
 
+> You can omit the `--target ...` argument if your project uses a custom 
+> [`.cargo/config.toml`](../.cargo/config.toml) with a `build.target` configuration.
+> This project uses:
+> 
+> ```
+> [build]
+> target = "thumbv7em-none-eabihf" # Cortex-M4 and Cortex-M7 (no FPU)
+> ```
+
 You can use the `+` button next to **Working Directory** to bring up a list of placeholders and
 see their current expansion value.
 
@@ -90,4 +99,33 @@ Select the correct board configuration from the **Select Board Config File** dia
 
 <div align="center">
   <img src="clion/03-01-board-config-assist.png" alt="Select Board Config File"/>
+</div>
+
+## Flashing and running the application
+
+When starting the selected Run/Debug Configuration, the **Debug** window should open.
+A tooltip will inform you about the firmware being uploaded through OpenOCD and you can
+now freely place breakpoints and step through them as usual.
+
+<div align="center">
+  <img src="clion/04-flash-and-run.png" alt="Flashing and Running"/>
+</div>
+
+### System Viewer Description (SVD)
+
+The **Peripherals** tab in the **Debug** view allows you to select the SVD file relevant
+to your board. I have selected mine from the [github.com/stm32-rs/stm32-rs](https://github.com/stm32-rs/stm32-rs)
+repo's `svd` subdirectory ([here](https://github.com/stm32-rs/stm32-rs/tree/e9edcdcfebb73ac81a972c4a00b755d026fff621/svd/vendor)).
+
+<div align="center">
+  <img src="clion/04-peripherals.png" alt="Peripherals"/>
+</div>
+
+### Register View
+
+Similarly, the **Registers** tab in the **Debug** view allows you to inspect the current register
+values.
+
+<div align="center">
+  <img src="clion/04-registers.png" alt="Registers"/>
 </div>
