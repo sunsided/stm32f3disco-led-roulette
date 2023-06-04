@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="CLionExternalBuildManager">
-    <target id="6c799a8e-9883-45a4-be7a-ec70c5b746f7" name="Cargo Release" defaultType="TOOL">
-      <configuration id="cce0c15e-4755-4a98-baa3-afce23081161" name="Cargo Release" toolchainName="Rust Embedded STM32F3">
+    <target id="be10eb5a-e983-494b-bda1-b9db72d724fc" name="Cargo Debug" defaultType="TOOL">
+      <configuration id="e7a9d29c-1b12-4339-8803-44c58f95f839" name="Cargo Debug" toolchainName="Rust Embedded STM32F3">
         <build type="TOOL">
-          <tool actionId="Tool_Rust Build_Build Release" />
+          <tool actionId="Tool_Rust Build_Build Debug" />
         </build>
         <clean type="TOOL">
           <tool actionId="Tool_Rust Build_Clean" />
         </clean>
       </configuration>
     </target>
-    <target id="be10eb5a-e983-494b-bda1-b9db72d724fc" name="Cargo Debug" defaultType="TOOL">
-      <configuration id="e7a9d29c-1b12-4339-8803-44c58f95f839" name="Cargo Debug" toolchainName="Rust Embedded STM32F3">
+    <target id="6c799a8e-9883-45a4-be7a-ec70c5b746f7" name="Cargo Release" defaultType="TOOL">
+      <configuration id="cce0c15e-4755-4a98-baa3-afce23081161" name="Cargo Release" toolchainName="Rust Embedded STM32F3">
         <build type="TOOL">
-          <tool actionId="Tool_Rust Build_Build Debug" />
+          <tool actionId="Tool_Rust Build_Build Release" />
         </build>
         <clean type="TOOL">
           <tool actionId="Tool_Rust Build_Clean" />
