@@ -1,6 +1,6 @@
 # JetBrains CLion Setup
 
-As of writing this (June 4th, 2023), JetBrains CLion does not have plug-in support for Rust,
+As of writing this (June 4th, 2023), JetBrains CLion does have plug-in support for Rust,
 as well as native support for Embedded development, but not for both combined. Once can
 however use the [OpenOCD support](https://www.jetbrains.com/help/clion/openocd-support.html)
 and custom build tooling to get a reasonable building and debugging experience without
