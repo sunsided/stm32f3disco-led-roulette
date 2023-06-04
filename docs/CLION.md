@@ -28,6 +28,8 @@ The **Build** and **Clean** steps will be created right after.
   <img src="clion/02-custom-build-targets.png" alt="Setting up the build targets"/>
 </div>
 
+> This configuration is stored in [`.idea/customTargets.xml`].
+
 Clicking the three-dot button next to **Build** and **Clean** will bring up the
 **External Tools** dialog.
 
@@ -47,6 +49,11 @@ e.g. to bundle debug and release builds per binary.
 
 You can use the `+` button next to **Working Directory** to bring up a list of placeholders and
 see their current expansion value.
+
+> This configuration is stored in [`.idea/tools/Group.xml`], where `Group` is the name of the group you entered.
+
+[`.idea/customTargets.xml`]: ../.idea/customTargets.xml
+[`.idea/tools/Group.xml`]: ../.idea/tools/Rust%20Build.xml
 
 ### ⚠️️️ Cargo Workspace Setup
 
