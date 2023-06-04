@@ -33,5 +33,6 @@ In the GDB prompt, run `continue`.
 
 ## Preparing the development environment
 
-For information on how to set up Rust, OpenOCD and GDB for the `thumbv7em-none-eabihf` target,
+- For information on how to set up **Rust, OpenOCD and GDB** for the `thumbv7em-none-eabihf` target,
 see [docs/SETUP.md](docs/SETUP.md).
+- For a **JetBrains CLion** specific setup, see [docs/CLION.md](docs/CLION.md).
