@@ -11,6 +11,20 @@ and debugging experience in JetBrains CLion while using Rust.
 This project contains a copy of the code from the [stm32f3-discovery](https://github.com/rubberduck203/stm32f3-discovery) crate
 as this crate is currently outdated and appears unmaintained.
 
+## Requirements
+
+This project uses the `thumbv7em-none-eabihf` target. Prepare it using:
+
+```shell
+rustup target add thumbv7em-none-eabihf
+```
+
+You will also need ~~`arm-none-eabi-gdb`~~ `gdb-multiarch`. Install it e.g. via:
+
+```shell
+sudo apt instal gdb-multiarch
+```
+
 ## Quickstart
 
 Start OpenOCD, e.g. by running [openocd.sh](openocd.sh):

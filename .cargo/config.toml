@@ -8,7 +8,7 @@
 
 # depending on your local GDB, pick one of the following
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "arm-none-eabi-gdb -q -x openocd.gdb"
+runner = "gdb-multiarch -q -x openocd.gdb"
 # runner = "gdb-multiarch -q -x ../openocd.gdb"
 # runner = "gdb -q -x ../openocd.gdb"
 
