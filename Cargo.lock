@@ -391,6 +391,7 @@ dependencies = [
  "cortex-m-rt",
  "panic-semihosting",
  "stm32f3xx-hal",
+ "switch-hal",
 ]
 
 [[package]]
@@ -416,6 +417,15 @@ dependencies = [
  "stm32-usbd",
  "stm32f3",
  "void",
+]
+
+[[package]]
+name = "switch-hal"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90a4adc8cbd1726249b161898e48e0f3f1ce74d34dc784cbbc98fba4ed283fbf"
+dependencies = [
+ "embedded-hal",
 ]
 
 [[package]]

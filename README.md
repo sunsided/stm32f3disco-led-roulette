@@ -8,9 +8,6 @@ and debugging experience in JetBrains CLion while using Rust.
   <img src="docs/led-roulette.webp" alt="Moving LEDs on the STM32F3 Discovery board"/>
 </div>
 
-This project contains a copy of the code from the [stm32f3-discovery](https://github.com/rubberduck203/stm32f3-discovery) crate
-as this crate is currently outdated and appears unmaintained.
-
 ## Requirements
 
 This project uses the `thumbv7em-none-eabihf` target. Prepare it using:
@@ -19,10 +16,20 @@ This project uses the `thumbv7em-none-eabihf` target. Prepare it using:
 rustup target add thumbv7em-none-eabihf
 ```
 
-You will also need ~~`arm-none-eabi-gdb`~~ `gdb-multiarch`. Install it e.g. via:
+Set up [probe-rs](https://probe.rs/), and follow the setup instructions (e.g. the [Linux udev rules](https://probe.rs/docs/getting-started/probe-setup/#linux%3A-udev-rules)).
+
+### Troubleshooting
+
+My STM32F3 Discovery had an outdated version of the ST-Link firmware, and probe-rs refused to work with it: 
+
+> probe-rs failed to open the debug probe
+> Error processing command: The firmware on the probe is outdated.
+
+Go to [ST-LINK, ST-LINK/V2, ST-LINK/V2-1, STLINK-V3 boards firmware upgrade](https://www.st.com/en/development-tools/stsw-link007.html)
+and download the latest version. Unzip, run the application and follow the instructions.
 
 ```shell
-sudo apt instal gdb-multiarch
+java -jar STLinkUpgrade.jar
 ```
 
 ## Quickstart

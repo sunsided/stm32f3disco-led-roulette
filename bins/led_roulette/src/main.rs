@@ -1,27 +1,46 @@
-//! Uses the StatefulOutputPin embedded_hal trait to toggle the pin
-//! On the stm32 discovery board this is the "south" led
 //! Target board: STM32F3DISCOVERY
 
-#![deny(unsafe_code)]
+// #![deny(unsafe_code)]  // TODO: Bring that back in
 #![no_main]
 #![no_std]
+
+mod leds;
 
 use panic_semihosting as _;
 
 use stm32f3xx_hal as hal;
 
 use cortex_m_rt::entry;
-use hal::pac;
-use hal::prelude::*;
+use stm32f3xx_hal::{delay::Delay, pac, prelude::*};
+use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
+use switch_hal::{ActiveHigh, OutputSwitch, Switch};
+use crate::leds::Leds;
+
+pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();;
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
+    let mut gpioa = dp.GPIOA.split(&mut rcc.ahb);
     let mut gpioc = dp.GPIOC.split(&mut rcc.ahb);
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
+
+    let leds = Leds::new(
+        gpioe.pe8,
+        gpioe.pe9,
+        gpioe.pe10,
+        gpioe.pe11,
+        gpioe.pe12,
+        gpioe.pe13,
+        gpioe.pe14,
+        gpioe.pe15,
+        &mut gpioe.moder,
+        &mut gpioe.otyper,
+    );
 
     let clocks = rcc
         .cfgr
@@ -30,23 +49,22 @@ fn main() -> ! {
         .pclk1(24.MHz()) // Set APB1 clock to half the system clock.
         .freeze(&mut flash.acr);
 
-    let mut led = gpioe
-        .pe13
-        .into_push_pull_output(&mut gpioe.moder, &mut gpioe.otyper);
+    let mut delay = Delay::new(cp.SYST, clocks);
+    let mut leds = leds.into_array();
 
-    led.set_low().unwrap();
-
+    let ms: u16 = 1000;
+    let mut curr = 0;
     loop {
-        led.toggle().unwrap();
-        cortex_m::asm::delay(8_000_000);
-        // Toggle by hand.
-        // Uses `StatefulOutputPin` instead of `ToggleableOutputPin`.
-        // Logically it is the same.
-        if led.is_set_low().unwrap() {
-            led.set_high().unwrap();
-        } else {
-            led.set_low().unwrap();
-        }
-        cortex_m::asm::delay(8_000_000);
+        let next = (curr + 1) % 8;
+
+        leds[next].on().ok();
+        delay.delay_ms(ms);
+
+        leds[curr].off().ok();
+        delay.delay_ms(ms);
+
+        curr = next;
+
+        // cortex_m::asm::delay(8_000_000);
     }
 }

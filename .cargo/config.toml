@@ -8,14 +8,17 @@
 
 # depending on your local GDB, pick one of the following
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "gdb-multiarch -q -x openocd.gdb"
-# runner = "gdb-multiarch -q -x ../openocd.gdb"
-# runner = "gdb -q -x ../openocd.gdb"
+# runner = "gdb-multiarch -q -x openocd.gdb"
+runner = "probe-rs run --chip STM32F303VCTx --connect-under-reset"
 
 rustflags = [
+  "-C", "link-arg=--nmagic",
   "-C", "link-arg=-Tlink.x",
+#   "-C", "link-arg=-Tdefmt.x",
 ]
 
 [build]
 target = "thumbv7em-none-eabihf" # Cortex-M4 and Cortex-M7 (no FPU)
 
+[env]
+DEFMT_LOG = "trace"
