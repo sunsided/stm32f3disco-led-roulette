@@ -37,13 +37,7 @@ static LED_FLAG: AtomicBool = AtomicBool::new(false);
 
 #[entry]
 fn main() -> ! {
-    defmt::println!("Hello, world!");
-
-    defmt::info!("info");
-    defmt::trace!("trace");
-    defmt::warn!("warn");
-    defmt::debug!("debug");
-    defmt::error!("error");
+    defmt::info!("Running {} {} (serial {})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), env!("SERIAL"));
 
     let dp = pac::Peripherals::take().unwrap();
     let _cp = cortex_m::Peripherals::take().unwrap();
@@ -123,10 +117,9 @@ fn main() -> ! {
     let mut serial = SerialPort::new(&usb_bus);
 
     let descriptors = StringDescriptors::default()
-        .manufacturer("Fake company")
-        .product("Serial port")
-        // .serial_number("TEST")
-        ;
+        .manufacturer("github.com/sunsided")
+        .product("stm32f3disco-rust")
+        .serial_number(env!("SERIAL"));
 
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
         .strings(&[descriptors]).unwrap()
@@ -155,6 +148,7 @@ fn main() -> ! {
 
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         if !usb_dev.poll(&mut [&mut serial]) {
+            wait_for_interrupt(); // TODO: might be slower than necessary
             continue;
         }
 
