@@ -2,11 +2,9 @@
 resolver = "2"
 default-members = [
     "bins/led_roulette",
-    "crates/stm32f3_discovery",
 ]
 members = [
     "bins/*",
-    "crates/*"
 ]
 
 [profile.release]
