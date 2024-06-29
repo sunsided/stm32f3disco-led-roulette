@@ -4,6 +4,7 @@
 #![no_std]
 
 use core::cell::RefCell;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use cortex_m::asm;
 use cortex_m_rt::entry;
@@ -11,11 +12,11 @@ use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
-use stm32f3xx_hal::{delay::Delay, interrupt, pac, prelude::*, timer};
+use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
-use switch_hal::{ActiveHigh, InputSwitch, IntoSwitch, OutputSwitch, Switch};
+use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
@@ -23,9 +24,16 @@ use crate::leds::Leds;
 
 mod leds;
 
+/// Determines how often the timer interrupt should fire.
+const WAKE_UP_EVERY_MS: u16 = 5;
+
+/// Determines the duration between LED updates.
+const DRIVE_LED_EVERY_MS: u16 = 30;
+
 pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
 static TIMER: Mutex<RefCell<Option<Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
+static LED_FLAG: AtomicBool = AtomicBool::new(false);
 
 #[entry]
 fn main() -> ! {
@@ -38,7 +46,7 @@ fn main() -> ! {
     defmt::error!("error");
 
     let dp = pac::Peripherals::take().unwrap();
-    let cp = cortex_m::Peripherals::take().unwrap();
+    let _cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
@@ -71,11 +79,6 @@ fn main() -> ! {
     );
     let mut leds = leds.into_array();
 
-    // Initialize PA0 as input with pull-down resistor
-    let button = gpioa.pa0.into_pull_down_input(&mut gpioa.moder, &mut gpioa.pupdr)
-        .downgrade()
-        .into_active_high_switch();
-
     // Configure a timer to generate interrupts.
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
 
@@ -84,7 +87,7 @@ fn main() -> ! {
     }
 
     timer.enable_interrupt(timer::Event::Update);
-    timer.start(500.milliseconds());
+    timer.start(5.milliseconds());
 
     // Put the timer in the global context.
     critical_section::with(|cs| {
@@ -131,20 +134,24 @@ fn main() -> ! {
         // .self_powered(false)
         .build();
 
-    let mut delay = Delay::new(cp.SYST, clocks);
-
-    let ms: u16 = 30;
     let mut curr = 0;
+    let mut led_state = FlipFlop::Flip;
+
     loop {
-        let next = (curr + 1) % 8;
-
-        leds[next].on().ok();
-        //        delay.delay_ms(ms);
-
-        leds[curr].off().ok();
-        //        delay.delay_ms(ms);
-
-        curr = next;
+        if LED_FLAG.swap(false, Ordering::AcqRel) {
+            match led_state {
+                FlipFlop::Flip => {
+                    let next = (curr + 1) % 8;
+                    leds[next].on().ok();
+                    led_state = FlipFlop::Flop(curr);
+                    curr = next;
+                }
+                FlipFlop::Flop(curr) => {
+                    leds[curr].off().ok();
+                    led_state = FlipFlop::Flip;
+                }
+            }
+        }
 
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         if !usb_dev.poll(&mut [&mut serial]) {
@@ -154,7 +161,7 @@ fn main() -> ! {
         let mut buf = [0u8; 64];
 
         match serial.read(&mut buf[..]) {
-            Ok(count) => {
+            Ok(_count) => {
                 // count bytes were read to &buf[..count]
                 defmt::trace!("Received USB data");
             }
@@ -169,7 +176,7 @@ fn main() -> ! {
         };
 
         match serial.write(&[0x3a, 0x29]) {
-            Ok(count) => {
+            Ok(_count) => {
                 // count bytes were written
             }
             Err(UsbError::WouldBlock) => {
@@ -182,6 +189,11 @@ fn main() -> ! {
             }
         };
     }
+}
+
+enum FlipFlop {
+    Flip,
+    Flop(usize),
 }
 
 /// Hardfault handler.
@@ -201,8 +213,12 @@ pub fn wait_for_interrupt() {
     asm::wfi()
 }
 
+
 #[interrupt]
 fn TIM2() {
+    static mut COUNT: u16 = 0;
+    const LED_UPDATE_COUNT: u16 = DRIVE_LED_EVERY_MS / WAKE_UP_EVERY_MS;
+
     // Just handle the pending interrupt event.
     critical_section::with(|cs| {
         if let Some(ref mut timer) = TIMER
@@ -213,9 +229,14 @@ fn TIM2() {
             // Make the inner Option<T> -> Option<&mut T>
             .as_mut()
         {
+            *COUNT += 1;
+            if *COUNT == LED_UPDATE_COUNT {
+                LED_FLAG.store(true, Ordering::Release);
+                *COUNT = 0;
+            }
+
             // Finally operate on the timer itself.
             timer.clear_event(timer::Event::Update);
-            defmt::info!("Timer fired");
         }
     })
 }
