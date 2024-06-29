@@ -1,6 +1,5 @@
 //! Target board: STM32F3DISCOVERY
 
-// #![deny(unsafe_code)]  // TODO: Bring that back in
 #![no_main]
 #![no_std]
 
@@ -13,7 +12,7 @@ use cortex_m_semihosting::debug;
 use cortex_m_rt::entry;
 use stm32f3xx_hal::{delay::Delay, pac, prelude::*};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
-use switch_hal::{ActiveHigh, OutputSwitch, Switch};
+use switch_hal::{ActiveHigh, InputSwitch, IntoSwitch, OutputSwitch, Switch};
 use crate::leds::Leds;
 
 pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
@@ -29,12 +28,11 @@ fn main() -> ! {
     defmt::error!("error");
 
     let dp = pac::Peripherals::take().unwrap();
-    let cp = cortex_m::Peripherals::take().unwrap();;
+    let cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
     let mut gpioa = dp.GPIOA.split(&mut rcc.ahb);
-    let mut gpioc = dp.GPIOC.split(&mut rcc.ahb);
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
 
     let leds = Leds::new(
@@ -49,6 +47,11 @@ fn main() -> ! {
         &mut gpioe.moder,
         &mut gpioe.otyper,
     );
+
+    // Initialize PA0 as input with pull-down resistor
+    let button = gpioa.pa0.into_pull_down_input(&mut gpioa.moder, &mut gpioa.pupdr)
+        .downgrade()
+        .into_active_high_switch();
 
     let clocks = rcc
         .cfgr
@@ -73,6 +76,12 @@ fn main() -> ! {
 
         curr = next;
 
+        match button.is_active() {
+            Ok(true) => { defmt::info!("Button was pressed!"); }
+            Ok(false) => { defmt::info!("Button was depressed! :(");  }
+            Err(_) => { defmt::error!("Failed to read button state"); }
+        }
+
         // cortex_m::asm::delay(8_000_000);
     }
 }
@@ -87,4 +96,9 @@ unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
     loop {
         debug::exit(debug::EXIT_FAILURE);
     }
+}
+
+/// Signals the process to go into low power mode until an interrupt occurs
+pub fn wait_for_interrupt() {
+    cortex_m::asm::wfi()
 }
