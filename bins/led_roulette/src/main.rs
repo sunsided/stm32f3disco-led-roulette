@@ -60,7 +60,7 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, clocks);
     let mut leds = leds.into_array();
 
-    let ms: u16 = 1000;
+    let ms: u16 = 30;
     let mut curr = 0;
     loop {
         let next = (curr + 1) % 8;
