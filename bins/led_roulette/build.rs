@@ -2,8 +2,17 @@ use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::Command;
 
 fn main() {
+    // Fetch git commit.
+    if let Ok(output) = Command::new("git").args(&["rev-parse", "HEAD"]).output() {
+        let git_hash = String::from_utf8(output.stdout).unwrap();
+        println!("cargo:rustc-env=SERIAL={}", git_hash);
+    } else {
+        println!("cargo:rustc-env=SERIAL={}", env!("CARGO_PKG_VERSION"));
+    }
+
     // Put `memory.x` in our output directory and ensure it's
     // on the linker search path.
     let out = &PathBuf::from(env::var_os("OUT_DIR").unwrap());

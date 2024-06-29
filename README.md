@@ -1,12 +1,21 @@
 # STM32F3 Discovery
 
 The LED Roulette example on the [STM32F3 Discovery](https://www.st.com/en/evaluation-tools/stm32f3discovery.html) board,
-written in Rust. An experiment to get started with embedded development in Rust, as well as testing the IDE based development
+written in Rust. An experiment to get started with embedded development in Rust, as well as testing the IDE based
+development
 and debugging experience in JetBrains CLion while using Rust.
 
 <div align="center">
   <img src="docs/led-roulette.webp" alt="Moving LEDs on the STM32F3 Discovery board"/>
 </div>
+
+## Flashing & Running
+
+Easy.
+
+```shell
+DEFMT_LOG=info cargo run
+````
 
 ## Requirements
 
@@ -26,7 +35,8 @@ Set up [flip-link](https://github.com/knurling-rs/flip-link):
 
 ### probe-rs
 
-Set up [probe-rs](https://probe.rs/), and follow the setup instructions (e.g. the [Linux udev rules](https://probe.rs/docs/getting-started/probe-setup/#linux%3A-udev-rules)).
+Set up [probe-rs](https://probe.rs/), and follow the setup instructions (e.g.
+the [Linux udev rules](https://probe.rs/docs/getting-started/probe-setup/#linux%3A-udev-rules)).
 
 ---
 
@@ -34,12 +44,13 @@ Set up [probe-rs](https://probe.rs/), and follow the setup instructions (e.g. th
 
 ### Outdated firmware
 
-My STM32F3 Discovery had an outdated version of the ST-Link firmware, and probe-rs refused to work with it: 
+My STM32F3 Discovery had an outdated version of the ST-Link firmware, and probe-rs refused to work with it:
 
 > probe-rs failed to open the debug probe
 > Error processing command: The firmware on the probe is outdated.
 
-Go to [ST-LINK, ST-LINK/V2, ST-LINK/V2-1, STLINK-V3 boards firmware upgrade](https://www.st.com/en/development-tools/stsw-link007.html)
+Go
+to [ST-LINK, ST-LINK/V2, ST-LINK/V2-1, STLINK-V3 boards firmware upgrade](https://www.st.com/en/development-tools/stsw-link007.html)
 and download the latest version. Unzip, run the application and follow the instructions.
 
 ```shell
@@ -51,9 +62,9 @@ java -jar STLinkUpgrade.jar
 > Error: The flashing procedure failed for 'target/thumbv7em-none-eabihf/debug/stm32f3disco-led-roulette'.
 >
 > Caused by:
->     0: Failed to erase flash sector at address 0x08000000.
->     1: Something during the interaction with the core went wrong
->     2: A timeout occurred.
+> 0: Failed to erase flash sector at address 0x08000000.
+> 1: Something during the interaction with the core went wrong
+> 2: A timeout occurred.
 
 From [this GitHub comment](https://github.com/probe-rs/probe-rs/issues/2496#issuecomment-2154359915):
 
