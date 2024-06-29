@@ -3,13 +3,17 @@
 #![no_main]
 #![no_std]
 
+use core::cell::RefCell;
+
 use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
+use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
-use stm32f3xx_hal::{delay::Delay, pac, prelude::*};
+use stm32f3xx_hal::{delay::Delay, interrupt, pac, prelude::*, timer};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
+use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
 use switch_hal::{ActiveHigh, InputSwitch, IntoSwitch, OutputSwitch, Switch};
 use usb_device::prelude::*;
@@ -20,6 +24,8 @@ use crate::leds::Leds;
 mod leds;
 
 pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
+
+static TIMER: Mutex<RefCell<Option<Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
 
 #[entry]
 fn main() -> ! {
@@ -69,6 +75,21 @@ fn main() -> ! {
     let button = gpioa.pa0.into_pull_down_input(&mut gpioa.moder, &mut gpioa.pupdr)
         .downgrade()
         .into_active_high_switch();
+
+    // Configure a timer to generate interrupts.
+    let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
+
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(timer.interrupt());
+    }
+
+    timer.enable_interrupt(timer::Event::Update);
+    timer.start(500.milliseconds());
+
+    // Put the timer in the global context.
+    critical_section::with(|cs| {
+        TIMER.borrow(cs).replace(Some(timer));
+    });
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
@@ -125,6 +146,7 @@ fn main() -> ! {
 
         curr = next;
 
+        // Must be called at least every 10 ms, i.e. at 100 Hz.
         if !usb_dev.poll(&mut [&mut serial]) {
             continue;
         }
@@ -176,5 +198,24 @@ unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
 
 /// Signals the process to go into low power mode until an interrupt occurs
 pub fn wait_for_interrupt() {
-    cortex_m::asm::wfi()
+    asm::wfi()
+}
+
+#[interrupt]
+fn TIM2() {
+    // Just handle the pending interrupt event.
+    critical_section::with(|cs| {
+        if let Some(ref mut timer) = TIMER
+            // Unlock resource for use in critical section
+            .borrow(cs)
+            // Get a mutable reference from the RefCell
+            .borrow_mut()
+            // Make the inner Option<T> -> Option<&mut T>
+            .as_mut()
+        {
+            // Finally operate on the timer itself.
+            timer.clear_event(timer::Event::Update);
+            defmt::info!("Timer fired");
+        }
+    })
 }
