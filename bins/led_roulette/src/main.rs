@@ -1,47 +1,40 @@
+//! Target board: STM32F3DISCOVERY
+
 #![no_main]
 #![no_std]
-#![deny(unsafe_code)]
 
-use stm32f3_discovery::cortex_m;
-use stm32f3_discovery::cortex_m_rt::entry;
-use stm32f3_discovery::leds::Leds;
-use stm32f3_discovery::stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
-use stm32f3_discovery::stm32f3xx_hal::{delay::Delay, pac, prelude::*};
-use stm32f3_discovery::switch_hal::{ActiveHigh, OutputSwitch, Switch};
+mod leds;
+
+use defmt_rtt as _; // global logger
+use panic_probe as _;
+
+use cortex_m_semihosting::debug;
+use cortex_m_rt::entry;
+use stm32f3xx_hal::{delay::Delay, pac, prelude::*};
+use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
+use switch_hal::{ActiveHigh, InputSwitch, IntoSwitch, OutputSwitch, Switch};
+use crate::leds::Leds;
+
+pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
 #[entry]
 fn main() -> ! {
-    let (mut delay, mut leds): (Delay, LedArray) = init();
+    defmt::println!("Hello, world!");
 
-    let ms = 30_u8;
-    loop {
-        for curr in 0..8 {
-            let next = (curr + 1) % 8;
+    defmt::info!("info");
+    defmt::trace!("trace");
+    defmt::warn!("warn");
+    defmt::debug!("debug");
+    defmt::error!("error");
 
-            leds[next].on().ok();
-            delay.delay_ms(ms);
+    let dp = pac::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
 
-            leds[curr].off().ok();
-            delay.delay_ms(ms);
-        }
-    }
-}
+    let mut flash = dp.FLASH.constrain();
+    let mut rcc = dp.RCC.constrain();
+    let mut gpioa = dp.GPIOA.split(&mut rcc.ahb);
+    let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
 
-/// The array of 8 LEDs available on the STM32F3 Discovery board.
-pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
-
-/// Initializes the MCU and prepares the LED array.
-pub fn init() -> (Delay, LedArray) {
-    let device_periphs = pac::Peripherals::take().unwrap();
-    let mut reset_and_clock_control = device_periphs.RCC.constrain();
-
-    let core_periphs = cortex_m::Peripherals::take().unwrap();
-    let mut flash = device_periphs.FLASH.constrain();
-    let clocks = reset_and_clock_control.cfgr.freeze(&mut flash.acr);
-    let delay = Delay::new(core_periphs.SYST, clocks);
-
-    // initialize user leds
-    let mut gpioe = device_periphs.GPIOE.split(&mut reset_and_clock_control.ahb);
     let leds = Leds::new(
         gpioe.pe8,
         gpioe.pe9,
@@ -55,5 +48,57 @@ pub fn init() -> (Delay, LedArray) {
         &mut gpioe.otyper,
     );
 
-    (delay, leds.into_array())
+    // Initialize PA0 as input with pull-down resistor
+    let button = gpioa.pa0.into_pull_down_input(&mut gpioa.moder, &mut gpioa.pupdr)
+        .downgrade()
+        .into_active_high_switch();
+
+    let clocks = rcc
+        .cfgr
+        .use_hse(8.MHz()) // STM32F3 Discovery has an 8 MHz quartz.
+        .sysclk(48.MHz()) // Set system clock to 48 MHz.
+        .pclk1(24.MHz()) // Set APB1 clock to half the system clock.
+        .freeze(&mut flash.acr);
+
+    let mut delay = Delay::new(cp.SYST, clocks);
+    let mut leds = leds.into_array();
+
+    let ms: u16 = 30;
+    let mut curr = 0;
+    loop {
+        let next = (curr + 1) % 8;
+
+        leds[next].on().ok();
+        delay.delay_ms(ms);
+
+        leds[curr].off().ok();
+        delay.delay_ms(ms);
+
+        curr = next;
+
+        match button.is_active() {
+            Ok(true) => { defmt::info!("Button was pressed!"); }
+            Ok(false) => { defmt::info!("Button was depressed! :(");  }
+            Err(_) => { defmt::error!("Failed to read button state"); }
+        }
+
+        // cortex_m::asm::delay(8_000_000);
+    }
+}
+
+/// Hardfault handler.
+///
+/// Terminates the application and makes a semihosting-capable debug tool exit
+/// with an error. This seems better than the default, which is to spin in a
+/// loop.
+#[cortex_m_rt::exception]
+unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
+    loop {
+        debug::exit(debug::EXIT_FAILURE);
+    }
+}
+
+/// Signals the process to go into low power mode until an interrupt occurs
+pub fn wait_for_interrupt() {
+    cortex_m::asm::wfi()
 }

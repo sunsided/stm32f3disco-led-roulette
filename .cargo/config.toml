@@ -1,21 +1,23 @@
-# default runner starts a GDB session, which requires OpenOCD to be
-# running, e.g.,
-## openocd -f interface/stlink.cfg -f target/stm32f3x.cfg
-
 [target.thumbv7em-none-eabi]
-# uncomment this to make `cargo run` execute programs on QEMU
-# runner = "qemu-system-arm -cpu cortex-m3 -machine lm3s6965evb -nographic -semihosting-config enable=on,target=native -kernel"
 
-# depending on your local GDB, pick one of the following
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "gdb-multiarch -q -x openocd.gdb"
-# runner = "gdb-multiarch -q -x ../openocd.gdb"
-# runner = "gdb -q -x ../openocd.gdb"
+runner = "probe-rs run --chip STM32F303VCTx --connect-under-reset"
 
 rustflags = [
+  # Stack Overflow protection
+  # See https://github.com/knurling-rs/flip-link
+  "-C", "linker=flip-link",
   "-C", "link-arg=-Tlink.x",
+  # defmt
+  # See https://defmt.ferrous-systems.com/setup
+  "-C", "link-arg=-Tdefmt.x",
+  # This is needed if your flash or ram addresses are not aligned to 0x10000 in memory.x
+  # See https://github.com/rust-embedded/cortex-m-quickstart/pull/95
+  "-C", "link-arg=--nmagic",
 ]
 
 [build]
 target = "thumbv7em-none-eabihf" # Cortex-M4 and Cortex-M7 (no FPU)
 
+[env]
+DEFMT_LOG = "trace"

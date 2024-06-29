@@ -8,4 +8,11 @@ publish = false
 edition = "2021"
 
 [dependencies]
-stm32f3-discovery = { path = "../../crates/stm32f3_discovery" }
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7.3"
+cortex-m-semihosting = "0.5.0"
+defmt = "0.3.8"
+defmt-rtt = "0.4.1"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+stm32f3xx-hal = { version = "0.10.0", features = ["stm32f303xc"] }
+switch-hal = "0.4.0"
