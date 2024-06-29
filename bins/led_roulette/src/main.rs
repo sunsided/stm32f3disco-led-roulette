@@ -6,10 +6,10 @@
 
 mod leds;
 
-use panic_semihosting as _;
+use defmt_rtt as _; // global logger
+use panic_probe as _;
 
-use stm32f3xx_hal as hal;
-
+use cortex_m_semihosting::debug;
 use cortex_m_rt::entry;
 use stm32f3xx_hal::{delay::Delay, pac, prelude::*};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
@@ -20,6 +20,14 @@ pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
 #[entry]
 fn main() -> ! {
+    defmt::println!("Hello, world!");
+
+    defmt::info!("info");
+    defmt::trace!("trace");
+    defmt::warn!("warn");
+    defmt::debug!("debug");
+    defmt::error!("error");
+
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();;
 
@@ -66,5 +74,17 @@ fn main() -> ! {
         curr = next;
 
         // cortex_m::asm::delay(8_000_000);
+    }
+}
+
+/// Hardfault handler.
+///
+/// Terminates the application and makes a semihosting-capable debug tool exit
+/// with an error. This seems better than the default, which is to spin in a
+/// loop.
+#[cortex_m_rt::exception]
+unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
+    loop {
+        debug::exit(debug::EXIT_FAILURE);
     }
 }
