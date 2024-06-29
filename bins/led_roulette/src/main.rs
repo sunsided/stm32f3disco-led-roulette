@@ -18,8 +18,17 @@ use hal::prelude::*;
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
 
+    let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
+    let mut gpioc = dp.GPIOC.split(&mut rcc.ahb);
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
+
+    let clocks = rcc
+        .cfgr
+        .use_hse(8.MHz()) // STM32F3 Discovery has an 8 MHz quartz.
+        .sysclk(48.MHz()) // Set system clock to 48 MHz.
+        .pclk1(24.MHz()) // Set APB1 clock to half the system clock.
+        .freeze(&mut flash.acr);
 
     let mut led = gpioe
         .pe13
