@@ -3,17 +3,21 @@
 #![no_main]
 #![no_std]
 
-mod leds;
-
-use defmt_rtt as _; // global logger
-use panic_probe as _;
-
-use cortex_m_semihosting::debug;
+use cortex_m::asm;
 use cortex_m_rt::entry;
+use cortex_m_semihosting::debug;
+use defmt_rtt as _;
+use panic_probe as _;
 use stm32f3xx_hal::{delay::Delay, pac, prelude::*};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
+use stm32f3xx_hal::usb::{Peripheral, UsbBus};
 use switch_hal::{ActiveHigh, InputSwitch, IntoSwitch, OutputSwitch, Switch};
+use usb_device::prelude::*;
+use usbd_serial::{SerialPort, USB_CLASS_CDC};
+
 use crate::leds::Leds;
+
+mod leds;
 
 pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
@@ -35,6 +39,18 @@ fn main() -> ! {
     let mut gpioa = dp.GPIOA.split(&mut rcc.ahb);
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
 
+    // Initialize the system clock(s).
+    let clocks = rcc
+        .cfgr
+        .use_hse(8.MHz()) // STM32F3 Discovery has an 8 MHz quartz.
+        .sysclk(48.MHz()) // Set system clock to 48 MHz.
+        .use_pll()
+        .pclk1(24.MHz()) // Set APB1 clock to half the system clock.
+        .pclk2(24.MHz())
+        .freeze(&mut flash.acr);
+    assert!(clocks.usbclk_valid());
+
+    // Prepare the LEDs.
     let leds = Leds::new(
         gpioe.pe8,
         gpioe.pe9,
@@ -47,21 +63,54 @@ fn main() -> ! {
         &mut gpioe.moder,
         &mut gpioe.otyper,
     );
+    let mut leds = leds.into_array();
 
     // Initialize PA0 as input with pull-down resistor
     let button = gpioa.pa0.into_pull_down_input(&mut gpioa.moder, &mut gpioa.pupdr)
         .downgrade()
         .into_active_high_switch();
 
-    let clocks = rcc
-        .cfgr
-        .use_hse(8.MHz()) // STM32F3 Discovery has an 8 MHz quartz.
-        .sysclk(48.MHz()) // Set system clock to 48 MHz.
-        .pclk1(24.MHz()) // Set APB1 clock to half the system clock.
-        .freeze(&mut flash.acr);
+    // F3 Discovery board has a pull-up resistor on the D+ line.
+    // Pull the D+ pin down to send a RESET condition to the USB bus.
+    // This forced reset is needed only for development, without it host
+    // will not reset your device when you upload new firmware.
+    let mut usb_dp = gpioa
+        .pa12
+        .into_push_pull_output(&mut gpioa.moder, &mut gpioa.otyper);
+    usb_dp.set_low().ok();
+
+    defmt::trace!("Waiting after boot-up USB power cycle");
+    asm::delay(clocks.sysclk().0 / 100);
+    defmt::trace!("Done waiting for USB power cycle");
+
+    // Enable USB.
+    let usb_dm = gpioa
+        .pa11
+        .into_af_push_pull(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh);
+    let usb_dp = usb_dp.into_af_push_pull(&mut gpioa.moder, &mut gpioa.otyper, &mut gpioa.afrh);
+
+    let usb = Peripheral {
+        usb: dp.USB,
+        pin_dm: usb_dm,
+        pin_dp: usb_dp,
+    };
+
+    let usb_bus = UsbBus::new(usb);
+    let mut serial = SerialPort::new(&usb_bus);
+
+    let descriptors = StringDescriptors::default()
+        .manufacturer("Fake company")
+        .product("Serial port")
+        // .serial_number("TEST")
+        ;
+
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
+        .strings(&[descriptors]).unwrap()
+        .device_class(USB_CLASS_CDC)
+        // .self_powered(false)
+        .build();
 
     let mut delay = Delay::new(cp.SYST, clocks);
-    let mut leds = leds.into_array();
 
     let ms: u16 = 30;
     let mut curr = 0;
@@ -69,20 +118,47 @@ fn main() -> ! {
         let next = (curr + 1) % 8;
 
         leds[next].on().ok();
-        delay.delay_ms(ms);
+        //        delay.delay_ms(ms);
 
         leds[curr].off().ok();
-        delay.delay_ms(ms);
+        //        delay.delay_ms(ms);
 
         curr = next;
 
-        match button.is_active() {
-            Ok(true) => { defmt::info!("Button was pressed!"); }
-            Ok(false) => { defmt::info!("Button was depressed! :(");  }
-            Err(_) => { defmt::error!("Failed to read button state"); }
+        if !usb_dev.poll(&mut [&mut serial]) {
+            continue;
         }
 
-        // cortex_m::asm::delay(8_000_000);
+        let mut buf = [0u8; 64];
+
+        match serial.read(&mut buf[..]) {
+            Ok(count) => {
+                // count bytes were read to &buf[..count]
+                defmt::trace!("Received USB data");
+            }
+            Err(UsbError::WouldBlock) => {
+                // No data received
+                defmt::trace!("Received no USB data");
+            }
+            Err(err) => {
+                // An error occurred
+                defmt::error!("Failed to receive USB data: {}", err);
+            }
+        };
+
+        match serial.write(&[0x3a, 0x29]) {
+            Ok(count) => {
+                // count bytes were written
+            }
+            Err(UsbError::WouldBlock) => {
+                // No data could be written (buffers full)
+                defmt::trace!("Buffer full while writing USB data");
+            }
+            Err(err) => {
+                // An error occurred
+                defmt::error!("Failed to send USB data: {}", err);
+            }
+        };
     }
 }
 
