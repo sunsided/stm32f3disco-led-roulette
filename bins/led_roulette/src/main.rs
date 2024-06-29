@@ -185,8 +185,11 @@ fn main() -> ! {
     }
 }
 
+/// LED flip-flop state machine.
 enum FlipFlop {
+    /// Turns on the next LED.
     Flip,
+    /// Turns off the specified LED (index).
     Flop(usize),
 }
 
