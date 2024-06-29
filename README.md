@@ -9,6 +9,12 @@ and debugging experience in JetBrains CLion while using Rust.
   <img src="docs/led-roulette.webp" alt="Moving LEDs on the STM32F3 Discovery board"/>
 </div>
 
+This project covers:
+
+- `probe-rs` flashing and `defmt` logging.
+- Driving the user LEDs via a Timer interrupt.
+- Operating a USB CDC serial port for communication.
+
 ## Flashing & Running
 
 Easy.
