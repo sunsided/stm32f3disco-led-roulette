@@ -6,23 +6,28 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use accelerometer::Accelerometer;
+use accelerometer::vector::I16x3;
 use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
-use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
+use stm32f3xx_hal::{i2c, interrupt, pac, prelude::*, timer};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
+use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
+use crate::compass::Compass;
 use crate::leds::Leds;
 
 mod leds;
+mod compass;
 
 /// Determines how often the timer interrupt should fire.
 const WAKE_UP_EVERY_MS: u16 = 5;
@@ -45,6 +50,7 @@ fn main() -> ! {
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
     let mut gpioa = dp.GPIOA.split(&mut rcc.ahb);
+    let mut gpiob = dp.GPIOB.split(&mut rcc.ahb);
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
 
     // Initialize the system clock(s).
@@ -72,6 +78,11 @@ fn main() -> ! {
         &mut gpioe.otyper,
     );
     let mut leds = leds.into_array();
+
+    // Initialize the LSM303DLHC/LSM303AGR MEMS e-compass.
+    let mut compass = Compass::new(
+        gpiob.pb6, gpiob.pb7, &mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl, dp.I2C1, clocks, &mut rcc.apb1,
+    ).expect("failed to set up compass");
 
     // Configure a timer to generate interrupts.
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
@@ -132,6 +143,44 @@ fn main() -> ! {
 
     loop {
         if LED_FLAG.swap(false, Ordering::AcqRel) {
+            match compass.temp_raw() {
+                Ok(value) => {
+                    defmt::info!("Received temperature: {} {}°C", value, value as f32 / 8.0 + 25.0)
+                }
+                Err(err) => {
+                    match err {
+                        Error::Arbitration => defmt::error!("I2C arbitration error"),
+                        Error::Bus => defmt::error!("I2C bus error"),
+                        Error::Busy => defmt::warn!("I2C bus busy"),
+                        Error::Nack => defmt::error!("I2C NACK"),
+                        _ => defmt::error!("Unknown I2C error")
+                    }
+                }
+            }
+
+            match compass.mag_raw() {
+                Ok(value) => {
+                    defmt::info!("Received compass data: {}, {}, {}", value.x, value.y, value.z)
+                }
+                Err(err) => {
+                    match err {
+                        Error::Arbitration => defmt::error!("I2C arbitration error"),
+                        Error::Bus => defmt::error!("I2C bus error"),
+                        Error::Busy => defmt::warn!("I2C bus busy"),
+                        Error::Nack => defmt::error!("I2C NACK"),
+                        _ => defmt::error!("Unknown I2C error")
+                    }
+                }
+            }
+
+            match compass.accel_norm() {
+                Ok(value) => {
+                    defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
+                }
+                Err(err) => { defmt::error!("Failed to read accelerometer data: {:?}", err) }
+            }
+
+
             match led_state {
                 FlipFlop::Flip => {
                     let next = (curr + 1) % 8;
