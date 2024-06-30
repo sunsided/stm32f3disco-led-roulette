@@ -80,6 +80,10 @@ impl Compass {
         })
     }
 
+    pub fn identify(&mut self) -> Result<bool, i2c::Error> {
+        self.lsm303dlhc.identify()
+    }
+
     /// To obtain float readings, divide by 8 LSB/°C and add an offset, presumably 20°C or 25°C.
     pub fn temp_raw(&mut self) -> Result<i16, i2c::Error> {
         self.lsm303dlhc.temp()

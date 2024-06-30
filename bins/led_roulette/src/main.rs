@@ -142,6 +142,24 @@ fn main() -> ! {
 
     compass.slow_compass().unwrap();
 
+    match compass.identify() {
+        Ok(true) => {
+            defmt::info!("LSM303DLHC sensor identification succeeded");
+        }
+        Ok(false) => {
+            defmt::error!("LSM303DLHC sensor identification failed");
+        }
+        Err(err) => {
+            match err {
+                Error::Arbitration => defmt::error!("I2C arbitration error"),
+                Error::Bus => defmt::error!("I2C bus error"),
+                Error::Busy => defmt::warn!("I2C bus busy"),
+                Error::Nack => defmt::error!("I2C NACK"),
+                _ => defmt::error!("Unknown I2C error")
+            }
+        }
+    };
+
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_event = usb_dev.poll(&mut [&mut serial]);
