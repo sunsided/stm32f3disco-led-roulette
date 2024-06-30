@@ -3,6 +3,8 @@
 
 use accelerometer::{Accelerometer, RawAccelerometer};
 use accelerometer::vector::{F32x3, I16x3};
+use lsm303dlhc::MagOdr;
+use lsm303dlhc::registers::{CraRegisterM, StatusRegisterM};
 use stm32f3xx_hal::gpio;
 use stm32f3xx_hal::gpio::{gpiob, OpenDrain};
 use stm32f3xx_hal::i2c;
@@ -60,6 +62,22 @@ impl Compass {
     pub fn mag_raw(&mut self) -> Result<I16x3, i2c::Error> {
         let reading = self.lsm303dlhc.mag()?;
         Ok(I16x3::new(reading.x, reading.y, reading.z))
+    }
+
+    /// Read the raw magnetometer data
+    pub fn mag_status(&mut self) -> Result<StatusRegisterM, i2c::Error> {
+        let reg: StatusRegisterM = self.lsm303dlhc.read_register()?;
+        Ok(reg)
+    }
+
+    pub fn slow_compass(&mut self) -> Result<(), i2c::Error> {
+        /* self.lsm303dlhc.modify_register(|reg: MrRegisterM| {
+            reg.with_single_conversion(true)
+        })?; */
+
+        self.lsm303dlhc.modify_register(|reg: CraRegisterM| {
+            reg.with_data_output_rate(MagOdr::Hz1_5)
+        })
     }
 
     /// To obtain float readings, divide by 8 LSB/°C and add an offset, presumably 20°C or 25°C.

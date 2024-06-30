@@ -326,7 +326,7 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 [[package]]
 name = "lsm303dlhc"
 version = "0.2.0"
-source = "git+https://github.com/sunsided/lsm303dlhc?branch=feature/status-registers#cd3abf2bbfef4e3de6e4b70043f38251e76c6939"
+source = "git+https://github.com/sunsided/lsm303dlhc?branch=feature/status-registers#b929dc3b8c02a3f4bb52bcaa599ea44bf96247c4"
 dependencies = [
  "accelerometer",
  "bitfield-struct",

@@ -140,8 +140,14 @@ fn main() -> ! {
     let mut curr = 0;
     let mut led_state = FlipFlop::Flip;
 
+    compass.slow_compass().unwrap();
+
     loop {
+        // Must be called at least every 10 ms, i.e. at 100 Hz.
+        let usb_event = usb_dev.poll(&mut [&mut serial]);
+
         if LED_FLAG.swap(false, Ordering::AcqRel) {
+            /*
             match compass.temp_raw() {
                 Ok(value) => {
                     defmt::info!("Received temperature: {} {}°C", value, value as f32 / 8.0 + 25.0)
@@ -156,10 +162,14 @@ fn main() -> ! {
                     }
                 }
             }
+            */
 
-            match compass.mag_raw() {
-                Ok(value) => {
-                    defmt::info!("Received compass data: {}, {}, {}", value.x, value.y, value.z)
+            let drdy = match compass.mag_status() {
+                Ok(status) => {
+                    if status.data_ready() {
+                        defmt::info!("Compass status: lock = {}, drdy = {}, {:08b}", status.do_lock(), status.data_ready(), status);
+                    }
+                    status.data_ready()
                 }
                 Err(err) => {
                     match err {
@@ -169,16 +179,35 @@ fn main() -> ! {
                         Error::Nack => defmt::error!("I2C NACK"),
                         _ => defmt::error!("Unknown I2C error")
                     }
+                    false
+                }
+            };
+
+            if drdy {
+                match compass.mag_raw() {
+                    Ok(value) => {
+                        defmt::info!("Received compass data: {}, {}, {}", value.x, value.y, value.z)
+                    }
+                    Err(err) => {
+                        match err {
+                            Error::Arbitration => defmt::error!("I2C arbitration error"),
+                            Error::Bus => defmt::error!("I2C bus error"),
+                            Error::Busy => defmt::warn!("I2C bus busy"),
+                            Error::Nack => defmt::error!("I2C NACK"),
+                            _ => defmt::error!("Unknown I2C error")
+                        }
+                    }
                 }
             }
 
+            /*
             match compass.accel_norm() {
                 Ok(value) => {
                     defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                 }
                 Err(_) => { defmt::error!("Failed to read accelerometer data") }
             }
-
+            */
 
             match led_state {
                 FlipFlop::Flip => {
@@ -194,8 +223,7 @@ fn main() -> ! {
             }
         }
 
-        // Must be called at least every 10 ms, i.e. at 100 Hz.
-        if !usb_dev.poll(&mut [&mut serial]) {
+        if !usb_event {
             wait_for_interrupt(); // TODO: might be slower than necessary
             continue;
         }
