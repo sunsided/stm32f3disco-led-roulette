@@ -6,7 +6,7 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use accelerometer::Accelerometer;
+use accelerometer::{Accelerometer, RawAccelerometer};
 use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
@@ -182,6 +182,7 @@ fn main() -> ! {
             }
             */
 
+            /*
             let drdy = match compass.mag_status() {
                 Ok(status) => {
                     if status.data_ready() {
@@ -217,15 +218,14 @@ fn main() -> ! {
                     }
                 }
             }
+            */
 
-            /*
             match compass.accel_norm() {
                 Ok(value) => {
                     defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                 }
                 Err(_) => { defmt::error!("Failed to read accelerometer data") }
             }
-            */
 
             match led_state {
                 FlipFlop::Flip => {
