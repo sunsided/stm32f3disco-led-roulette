@@ -7,14 +7,13 @@ use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::Accelerometer;
-use accelerometer::vector::I16x3;
 use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
-use stm32f3xx_hal::{i2c, interrupt, pac, prelude::*, timer};
+use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
 use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
@@ -96,7 +95,7 @@ fn main() -> ! {
 
     // Put the timer in the global context.
     critical_section::with(|cs| {
-        TIMER.borrow(cs).replace(Some(timer));
+        TIMER.replace(cs, Some(timer));
     });
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
@@ -177,7 +176,7 @@ fn main() -> ! {
                 Ok(value) => {
                     defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                 }
-                Err(err) => { defmt::error!("Failed to read accelerometer data: {:?}", err) }
+                Err(_) => { defmt::error!("Failed to read accelerometer data") }
             }
 
 

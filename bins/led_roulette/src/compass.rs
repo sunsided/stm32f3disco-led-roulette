@@ -10,7 +10,7 @@ use stm32f3xx_hal::pac;
 use stm32f3xx_hal::prelude::*;
 use stm32f3xx_hal::rcc;
 
-type Lsm303 = lsm303dlhc::Lsm303dlhc<
+type Lsm303 = lsm303dlhc::LSM303DLHC<
     i2c::I2c<
         pac::I2C1,
         (
@@ -68,6 +68,7 @@ impl Compass {
     }
 
     /// Consume the Compass and return the underlying Lsm303dhlc
+    #[allow(unused)]
     pub fn into_lsm303dlhc(self) -> Lsm303 {
         self.lsm303dlhc
     }
