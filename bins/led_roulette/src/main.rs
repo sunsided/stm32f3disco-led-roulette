@@ -143,17 +143,8 @@ fn main() -> ! {
     // Make the sensor really slow to simplify debugging.
     compass.slowpoke().unwrap();
 
-    match compass.identify() {
-        Ok(true) => {
-            defmt::info!("LSM303DLHC sensor identification succeeded");
-        }
-        Ok(false) => {
-            defmt::error!("LSM303DLHC sensor identification failed");
-        }
-        Err(err) => {
-            log_i2c_error(err);
-        }
-    };
+    // Run a bit of welcoming logic.
+    identify_compass(&mut compass);
 
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
@@ -264,6 +255,20 @@ fn main() -> ! {
             }
         };
     }
+}
+
+fn identify_compass(compass: &mut Compass) {
+    match compass.identify() {
+        Ok(true) => {
+            defmt::info!("LSM303DLHC sensor identification succeeded");
+        }
+        Ok(false) => {
+            defmt::error!("LSM303DLHC sensor identification failed");
+        }
+        Err(err) => {
+            log_i2c_error(err);
+        }
+    };
 }
 
 fn log_i2c_error(err: Error) {
