@@ -41,14 +41,22 @@ pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 static TIMER: Mutex<RefCell<Option<Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
 
 /// LSM303DLHC magnetometer data ready (DRDY) signal.
-/// PE2 pin, used to clear the interrupt in the EXTI2 handler.
+/// PE2 pin, used to clear the interrupt in the `EXTI2` (`EXTI2_TSC`) handler.
 static PE2_INT: Mutex<RefCell<Option<Pin<Gpioe, U<2>, Input>>>> = Mutex::new(RefCell::new(None));
+
+/// PE4 pin, used to clear the interrupt in the EXTI4 handler
+static PE4_INT: Mutex<RefCell<Option<Pin<Gpioe, U<4>, Input>>>> = Mutex::new(RefCell::new(None));
 
 /// Flag to drive the LED roulette.
 static UPDATE_LED_ROULETTE: AtomicBool = AtomicBool::new(false);
 
 /// Indicates whether magnetometer data is ready.
+/// This is indicated by an interrupt on the [`PE2_INT`] pin and flagged in the `EXTI2_TSC` handler.
 static MAGNETOMETER_READY: AtomicBool = AtomicBool::new(false);
+
+/// Indicates whether accelerometer data is ready.
+/// This is indicated by an interrupt on the [`PE4_INT`] pin and flagged in the `EXTI4` handler.
+static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(false);
 
 #[entry]
 fn main() -> ! {
@@ -119,6 +127,14 @@ fn main() -> ! {
 
     critical_section::with(|cs| *PE2_INT.borrow(cs).borrow_mut() = Some(pe2));
     unsafe { NVIC::unmask(mems_drdy_interrupt) };
+
+    // Configure PE4 as interrupt source for the LSM303DLHC's INT1 line.
+    let mut pe4 = gpioe.pe4.into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
+    syscfg.select_exti_interrupt_source(&pe4);
+    pe4.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
+    pe4.enable_interrupt(&mut dp.EXTI);
+    let mems_int1_interrupt = pe4.interrupt();
+    unsafe { NVIC::unmask(mems_int1_interrupt) };
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
@@ -191,6 +207,16 @@ fn main() -> ! {
                 Err(err) => {
                     log_i2c_error(err);
                 }
+            }
+        }
+
+        // Check for a magnetometer event.
+        if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
+            match compass.accel_raw() {
+                Ok(value) => {
+                    defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
+                }
+                Err(_) => { defmt::error!("Failed to read accelerometer data") }
             }
         }
 
@@ -380,13 +406,6 @@ fn TIM2() {
     })
 }
 
-/// Interrupt for PE0: INT1 of the LSM303DLHC
-///
-/// The external interrupt number maps to the MCU pin number.
-#[interrupt]
-fn EXTI0() {}
-
-
 /// Interrupt for PE2: DRDY of the LSM303DLHC
 ///
 /// The external interrupt number maps to the MCU pin number.
@@ -399,6 +418,23 @@ fn EXTI2_TSC() {
             .as_mut()
         {
             MAGNETOMETER_READY.store(true, Ordering::Release);
+            pin.clear_interrupt();
+        }
+    });
+}
+
+/// Interrupt for PE4: INT1 of the LSM303DLHC
+///
+/// The external interrupt number maps to the MCU pin number.
+#[interrupt]
+fn EXTI4() {
+    critical_section::with(|cs| {
+        if let Some(ref mut pin) = PE4_INT
+            .borrow(cs)
+            .borrow_mut()
+            .as_mut()
+        {
+            ACCELEROMETER_READY.store(true, Ordering::Release);
             pin.clear_interrupt();
         }
     });
