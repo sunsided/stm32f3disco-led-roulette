@@ -182,11 +182,10 @@ fn main() -> ! {
             }
             */
 
-            /*
             let drdy = match compass.mag_status() {
                 Ok(status) => {
                     if status.data_ready() {
-                        defmt::info!("Compass status: lock = {}, drdy = {}, {:08b}", status.do_lock(), status.data_ready(), status);
+                        defmt::debug!("Compass status: lock = {}, drdy = {}, {:08b}", status.do_lock(), status.data_ready(), status);
                     }
                     status.data_ready()
                 }
@@ -205,7 +204,17 @@ fn main() -> ! {
             if drdy {
                 match compass.mag_raw() {
                     Ok(value) => {
-                        defmt::info!("Received compass data: {}, {}, {}", value.x, value.y, value.z)
+                        use micromath::F32Ext;
+
+                        let x = value.x as f32;
+                        let y = value.y as f32;
+                        let z = value.z as f32;
+                        let inv_norm = (x * x + y * y + z * z).invsqrt();
+                        let x = x * inv_norm;
+                        let y = y * inv_norm;
+                        let z = z * inv_norm;
+
+                        defmt::info!("Received compass data: {}, {}, {} - ({}, {}, {})", value.x, value.y, value.z, x, y, z)
                     }
                     Err(err) => {
                         match err {
@@ -218,14 +227,16 @@ fn main() -> ! {
                     }
                 }
             }
-            */
 
+
+            /*
             match compass.accel_raw() {
                 Ok(value) => {
                     defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                 }
                 Err(_) => { defmt::error!("Failed to read accelerometer data") }
             }
+            */
 
             match led_state {
                 FlipFlop::Flip => {

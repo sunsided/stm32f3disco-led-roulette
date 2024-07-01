@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-pdflatex orientation.tex
-convert -background white -alpha remove orientation.pdf orientation.png
-optipng orientation.png
+pdflatex accelerometer.tex
+pdflatex magnetometer.tex
+convert -background white -alpha remove accelerometer.pdf accelerometer.png
+convert -background white -alpha remove magnetometer.pdf magnetometer.png
+optipng *.png
 

@@ -86,7 +86,18 @@ cargo install probe-rs-tools --git https://github.com/probe-rs/probe-rs --locked
 
 ## Sensor orientation
 
-The onboard LSM303DLHC sensor seems to be oriented in a left-handed coordinate system with X pointing forward
-(towards the USB connectors), Y pointing left and Z pointing down.
+The onboard LSM303DLHC' accelerometer sensor seems to be oriented in a left-handed coordinate system with
 
-![](docs/tikz/orientation.png)
+- X pointing forward (towards the USB connectors)
+- Y pointing left and
+- Z pointing down.
+
+The magnetometer on the other hand - pun not intended - appears to use a right-handed coordinate system with
+
+- X pointing backward (towards the LEDs)
+- Y pointing right and
+- Z pointing up.
+
+| Accelerometer                    | Magnetometer                    |
+|----------------------------------|---------------------------------|
+| ![](docs/tikz/accelerometer.png) | ![](docs/tikz/magnetometer.png) ||
