@@ -86,17 +86,27 @@ cargo install probe-rs-tools --git https://github.com/probe-rs/probe-rs --locked
 
 ## Sensor orientation
 
-The onboard LSM303DLHC' accelerometer sensor seems to be oriented in a left-handed coordinate system with
+The onboard LSM303DLHC's accelerometer sensor seems to be oriented in a left-handed coordinate system:
 
-- X pointing forward (towards the USB connectors)
-- Y pointing left and
-- Z pointing down.
+- X points forward (towards the USB connectors)
+    - When pointing the USB ports downwards, the sensors reads a positive maximum on the
+      X axis.
+    - When pointing the opposite end downwards, the sensor reads a negative maximum on the X axis.
+- Y points left
+    - When pointing the left side downwards, the sensor reads a positive maximum on the Y axis.
+- Z points down
+    - When pointing the bottom side downwards, the sensor reads a positive maximum on the Z axis.
 
-The magnetometer on the other hand - pun not intended - appears to use a right-handed coordinate system with
+The magnetometer on the other hand - pun not intended - appears to use a right-handed coordinate system :
 
-- X pointing backward (towards the LEDs)
-- Y pointing right and
-- Z pointing up.
+- X points backward (towards the LEDs)
+    - When pointing the USB ports towards the earth's magnetic field vector, the sensors reads a negative maximum on the
+      X axis.
+    - When pointing the opposite end towards the vector, the sensor reads a positive maximum on the X axis.
+- Y points right
+    - When pointing the right side towards the vector, the sensor reads a positive maximum on the Y axis.
+- Z points up
+    - When pointing the top side towards the vector, the sensor reads a positive maximum on the Z axis.
 
 | Accelerometer                    | Magnetometer                    |
 |----------------------------------|---------------------------------|
