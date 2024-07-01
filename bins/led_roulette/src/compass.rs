@@ -3,8 +3,8 @@
 
 use accelerometer::{Accelerometer, RawAccelerometer};
 use accelerometer::vector::{F32x3, I16x3};
-use lsm303dlhc::MagOdr;
-use lsm303dlhc::registers::{CraRegisterM, StatusRegisterM};
+use lsm303dlhc_ng::MagOdr;
+use lsm303dlhc_registers::mag::{CraRegisterM, StatusRegisterM};
 use stm32f3xx_hal::gpio;
 use stm32f3xx_hal::gpio::{gpiob, OpenDrain};
 use stm32f3xx_hal::i2c;
@@ -12,7 +12,7 @@ use stm32f3xx_hal::pac;
 use stm32f3xx_hal::prelude::*;
 use stm32f3xx_hal::rcc;
 
-type Lsm303 = lsm303dlhc::LSM303DLHC<
+type Lsm303 = lsm303dlhc_ng::LSM303DLHC<
     i2c::I2c<
         pac::I2C1,
         (
@@ -60,7 +60,7 @@ impl Compass {
 
     /// Read the raw magnetometer data
     pub fn mag_raw(&mut self) -> Result<I16x3, i2c::Error> {
-        let reading = self.lsm303dlhc.mag()?;
+        let reading = self.lsm303dlhc.mag_raw()?;
         Ok(I16x3::new(reading.x, reading.y, reading.z))
     }
 
@@ -86,7 +86,7 @@ impl Compass {
 
     /// To obtain float readings, divide by 8 LSB/°C and add an offset, presumably 20°C or 25°C.
     pub fn temp_raw(&mut self) -> Result<i16, i2c::Error> {
-        self.lsm303dlhc.temp()
+        self.lsm303dlhc.temp_raw()
     }
 
     /// Consume the Compass and return the underlying Lsm303dhlc
@@ -100,7 +100,7 @@ impl RawAccelerometer<I16x3> for Compass {
     type Error = i2c::Error;
 
     fn accel_raw(&mut self) -> Result<I16x3, accelerometer::Error<Self::Error>> {
-        self.lsm303dlhc.accel_raw()
+        RawAccelerometer::<I16x3>::accel_raw(&mut self.lsm303dlhc)
     }
 }
 

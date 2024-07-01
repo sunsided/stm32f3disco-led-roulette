@@ -299,6 +299,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hardware-registers"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09bb5f836deb3345765ac220b788d745c7d80d91c6c8c192a6603137fd8d2c7a"
+
+[[package]]
 name = "hash32"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -324,9 +330,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
-name = "lsm303dlhc"
-version = "0.2.0"
-source = "git+https://github.com/sunsided/lsm303dlhc?branch=main#ab8d25951c77c9c97f61648f95b281b779c24478"
+name = "lsm303dlhc-ng"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a1679a510cba31793b1eb9b6b18adc1fc6f6e672e92ce102a520b3ee789e460"
 dependencies = [
  "accelerometer",
  "bitfield-struct",
@@ -334,6 +341,18 @@ dependencies = [
  "defmt",
  "embedded-hal",
  "generic-array 1.0.0",
+ "lsm303dlhc-registers",
+]
+
+[[package]]
+name = "lsm303dlhc-registers"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93701757a847c5bb2ae7d5e6ffcc37db714f72f90c7188d0aa9f0db2916085e"
+dependencies = [
+ "bitfield-struct",
+ "defmt",
+ "hardware-registers",
 ]
 
 [[package]]
@@ -570,7 +589,8 @@ dependencies = [
  "critical-section",
  "defmt",
  "defmt-rtt",
- "lsm303dlhc",
+ "lsm303dlhc-ng",
+ "lsm303dlhc-registers",
  "micromath 2.1.0",
  "panic-probe",
  "stm32f3xx-hal",

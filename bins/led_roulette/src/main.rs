@@ -6,7 +6,7 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use accelerometer::{Accelerometer, RawAccelerometer};
+use accelerometer::RawAccelerometer;
 use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
