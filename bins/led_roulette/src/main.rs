@@ -140,7 +140,8 @@ fn main() -> ! {
     let mut curr = 0;
     let mut led_state = FlipFlop::Flip;
 
-    compass.slow_compass().unwrap();
+    // Make the sensor really slow to simplify debugging.
+    compass.slowpoke().unwrap();
 
     match compass.identify() {
         Ok(true) => {
@@ -150,33 +151,13 @@ fn main() -> ! {
             defmt::error!("LSM303DLHC sensor identification failed");
         }
         Err(err) => {
-            match err {
-                Error::Arbitration => defmt::error!("I2C arbitration error"),
-                Error::Bus => defmt::error!("I2C bus error"),
-                Error::Busy => defmt::warn!("I2C bus busy"),
-                Error::Nack => defmt::error!("I2C NACK"),
-                _ => defmt::error!("Unknown I2C error")
-            }
+            log_i2c_error(err);
         }
     };
 
-    let mut counter = 0;
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_event = usb_dev.poll(&mut [&mut serial]);
-
-        if counter > 1000 {
-            counter = 0;
-
-            // baud rate is set by the host! :)
-            let line_coding = serial.line_coding();
-            defmt::warn!("data rate: {}", line_coding.data_rate());
-            wait_for_interrupt();
-
-            continue;
-        }
-
-        counter += 1;
 
         if LED_FLAG.swap(false, Ordering::AcqRel) {
             /*
@@ -185,13 +166,7 @@ fn main() -> ! {
                     defmt::info!("Received temperature: {} {}°C", value, value as f32 / 8.0 + 25.0)
                 }
                 Err(err) => {
-                    match err {
-                        Error::Arbitration => defmt::error!("I2C arbitration error"),
-                        Error::Bus => defmt::error!("I2C bus error"),
-                        Error::Busy => defmt::warn!("I2C bus busy"),
-                        Error::Nack => defmt::error!("I2C NACK"),
-                        _ => defmt::error!("Unknown I2C error")
-                    }
+                    log_i2c_error(err);
                 }
             }
             */
@@ -205,13 +180,7 @@ fn main() -> ! {
                     status.data_ready()
                 }
                 Err(err) => {
-                    match err {
-                        Error::Arbitration => defmt::error!("I2C arbitration error"),
-                        Error::Bus => defmt::error!("I2C bus error"),
-                        Error::Busy => defmt::warn!("I2C bus busy"),
-                        Error::Nack => defmt::error!("I2C NACK"),
-                        _ => defmt::error!("Unknown I2C error")
-                    }
+                    log_i2c_error(err);
                     false
                 }
             };
@@ -232,13 +201,7 @@ fn main() -> ! {
                         defmt::info!("Received compass data: {}, {}, {} - ({}, {}, {})", value.x, value.y, value.z, x, y, z)
                     }
                     Err(err) => {
-                        match err {
-                            Error::Arbitration => defmt::error!("I2C arbitration error"),
-                            Error::Bus => defmt::error!("I2C bus error"),
-                            Error::Busy => defmt::warn!("I2C bus busy"),
-                            Error::Nack => defmt::error!("I2C NACK"),
-                            _ => defmt::error!("Unknown I2C error")
-                        }
+                        log_i2c_error(err);
                     }
                 }
             }
@@ -300,6 +263,16 @@ fn main() -> ! {
                 defmt::error!("Failed to send USB data: {}", err);
             }
         };
+    }
+}
+
+fn log_i2c_error(err: Error) {
+    match err {
+        Error::Arbitration => defmt::error!("I2C arbitration error"),
+        Error::Bus => defmt::error!("I2C bus error"),
+        Error::Busy => defmt::warn!("I2C bus busy"),
+        Error::Nack => defmt::error!("I2C NACK"),
+        _ => defmt::error!("Unknown I2C error")
     }
 }
 
