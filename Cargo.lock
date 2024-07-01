@@ -331,9 +331,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "lsm303dlhc-ng"
-version = "0.3.0"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a1679a510cba31793b1eb9b6b18adc1fc6f6e672e92ce102a520b3ee789e460"
+checksum = "f350d2cd9ecd6c8b0b3b60a02a551575ba8fb2b3dcd57af9f033da3346b5e718"
 dependencies = [
  "accelerometer",
  "bitfield-struct",
@@ -346,9 +346,9 @@ dependencies = [
 
 [[package]]
 name = "lsm303dlhc-registers"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f93701757a847c5bb2ae7d5e6ffcc37db714f72f90c7188d0aa9f0db2916085e"
+checksum = "9eb4b84cdc823aa984c8f4ebc87f6134bc8d7d44a053a68655359243827d4117"
 dependencies = [
  "bitfield-struct",
  "defmt",

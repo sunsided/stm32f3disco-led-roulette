@@ -8,13 +8,14 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
+use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
 use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
-use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
+use stm32f3xx_hal::gpio::{Edge, gpioe, Gpioe, Input, Output, Pin, PushPull, U};
 use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
@@ -36,18 +37,37 @@ const DRIVE_LED_EVERY_MS: u16 = 30;
 
 pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
+/// Timer interrupt from TIM2.
 static TIMER: Mutex<RefCell<Option<Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
-static LED_FLAG: AtomicBool = AtomicBool::new(false);
+
+/// LSM303DLHC magnetometer data ready (DRDY) signal.
+/// PE2 pin, used to clear the interrupt in the `EXTI2` (`EXTI2_TSC`) handler.
+static PE2_INT: Mutex<RefCell<Option<Pin<Gpioe, U<2>, Input>>>> = Mutex::new(RefCell::new(None));
+
+/// PE4 pin, used to clear the interrupt in the EXTI4 handler
+static PE4_INT: Mutex<RefCell<Option<Pin<Gpioe, U<4>, Input>>>> = Mutex::new(RefCell::new(None));
+
+/// Flag to drive the LED roulette.
+static UPDATE_LED_ROULETTE: AtomicBool = AtomicBool::new(false);
+
+/// Indicates whether magnetometer data is ready.
+/// This is indicated by an interrupt on the [`PE2_INT`] pin and flagged in the `EXTI2_TSC` handler.
+static MAGNETOMETER_READY: AtomicBool = AtomicBool::new(false);
+
+/// Indicates whether accelerometer data is ready.
+/// This is indicated by an interrupt on the [`PE4_INT`] pin and flagged in the `EXTI4` handler.
+static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(false);
 
 #[entry]
 fn main() -> ! {
     defmt::info!("Running {} {} (serial {})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), env!("SERIAL"));
 
-    let dp = pac::Peripherals::take().unwrap();
+    let mut dp = pac::Peripherals::take().unwrap();
     let _cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
+    let mut syscfg = dp.SYSCFG.constrain(&mut rcc.apb2);
     let mut gpioa = dp.GPIOA.split(&mut rcc.ahb);
     let mut gpiob = dp.GPIOB.split(&mut rcc.ahb);
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
@@ -87,7 +107,7 @@ fn main() -> ! {
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
 
     unsafe {
-        cortex_m::peripheral::NVIC::unmask(timer.interrupt());
+        NVIC::unmask(timer.interrupt());
     }
 
     timer.enable_interrupt(timer::Event::Update);
@@ -97,6 +117,24 @@ fn main() -> ! {
     critical_section::with(|cs| {
         TIMER.replace(cs, Some(timer));
     });
+
+    // Configure PE2 as interrupt source for the LSM303DLHC's DRDY line.
+    let mut pe2 = gpioe.pe2.into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
+    syscfg.select_exti_interrupt_source(&pe2);
+    pe2.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
+    pe2.enable_interrupt(&mut dp.EXTI);
+    let mems_drdy_interrupt = pe2.interrupt();
+
+    critical_section::with(|cs| *PE2_INT.borrow(cs).borrow_mut() = Some(pe2));
+    unsafe { NVIC::unmask(mems_drdy_interrupt) };
+
+    // Configure PE4 as interrupt source for the LSM303DLHC's INT1 line.
+    let mut pe4 = gpioe.pe4.into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
+    syscfg.select_exti_interrupt_source(&pe4);
+    pe4.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
+    pe4.enable_interrupt(&mut dp.EXTI);
+    let mems_int1_interrupt = pe4.interrupt();
+    // unsafe { NVIC::unmask(mems_int1_interrupt) };
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
@@ -140,58 +178,59 @@ fn main() -> ! {
     let mut curr = 0;
     let mut led_state = FlipFlop::Flip;
 
-    compass.slow_compass().unwrap();
+    // Run a bit of welcoming logic.
+    identify_compass(&mut compass);
 
-    match compass.identify() {
-        Ok(true) => {
-            defmt::info!("LSM303DLHC sensor identification succeeded");
-        }
-        Ok(false) => {
-            defmt::error!("LSM303DLHC sensor identification failed");
-        }
-        Err(err) => {
-            match err {
-                Error::Arbitration => defmt::error!("I2C arbitration error"),
-                Error::Bus => defmt::error!("I2C bus error"),
-                Error::Busy => defmt::warn!("I2C bus busy"),
-                Error::Nack => defmt::error!("I2C NACK"),
-                _ => defmt::error!("Unknown I2C error")
-            }
-        }
-    };
+    // Make the sensor really slow to simplify debugging.
+    compass.slowpoke().unwrap();
 
-    let mut counter = 0;
+    // Enable interrupts for accerometer data.
+    compass.interrupt().unwrap();
+
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_event = usb_dev.poll(&mut [&mut serial]);
 
-        if counter > 1000 {
-            counter = 0;
+        // Check for a magnetometer event.
+        if MAGNETOMETER_READY.swap(false, Ordering::AcqRel) {
+            match compass.mag_raw() {
+                Ok(value) => {
+                    use micromath::F32Ext;
 
-            // baud rate is set by the host! :)
-            let line_coding = serial.line_coding();
-            defmt::warn!("data rate: {}", line_coding.data_rate());
-            wait_for_interrupt();
+                    let x = value.x as f32;
+                    let y = value.y as f32;
+                    let z = value.z as f32;
+                    let inv_norm = (x * x + y * y + z * z).invsqrt();
+                    let x = x * inv_norm;
+                    let y = y * inv_norm;
+                    let z = z * inv_norm;
 
-            continue;
+                    defmt::info!("Received compass data: {}, {}, {} - ({}, {}, {})", value.x, value.y, value.z, x, y, z)
+                }
+                Err(err) => {
+                    log_i2c_error(err);
+                }
+            }
         }
 
-        counter += 1;
+        // Check for a magnetometer event.
+        if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
+            match compass.accel_raw() {
+                Ok(value) => {
+                    defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
+                }
+                Err(_) => { defmt::error!("Failed to read accelerometer data") }
+            }
+        }
 
-        if LED_FLAG.swap(false, Ordering::AcqRel) {
+        if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
             /*
             match compass.temp_raw() {
                 Ok(value) => {
                     defmt::info!("Received temperature: {} {}°C", value, value as f32 / 8.0 + 25.0)
                 }
                 Err(err) => {
-                    match err {
-                        Error::Arbitration => defmt::error!("I2C arbitration error"),
-                        Error::Bus => defmt::error!("I2C bus error"),
-                        Error::Busy => defmt::warn!("I2C bus busy"),
-                        Error::Nack => defmt::error!("I2C NACK"),
-                        _ => defmt::error!("Unknown I2C error")
-                    }
+                    log_i2c_error(err);
                 }
             }
             */
@@ -205,13 +244,7 @@ fn main() -> ! {
                     status.data_ready()
                 }
                 Err(err) => {
-                    match err {
-                        Error::Arbitration => defmt::error!("I2C arbitration error"),
-                        Error::Bus => defmt::error!("I2C bus error"),
-                        Error::Busy => defmt::warn!("I2C bus busy"),
-                        Error::Nack => defmt::error!("I2C NACK"),
-                        _ => defmt::error!("Unknown I2C error")
-                    }
+                    log_i2c_error(err);
                     false
                 }
             };
@@ -232,24 +265,20 @@ fn main() -> ! {
                         defmt::info!("Received compass data: {}, {}, {} - ({}, {}, {})", value.x, value.y, value.z, x, y, z)
                     }
                     Err(err) => {
-                        match err {
-                            Error::Arbitration => defmt::error!("I2C arbitration error"),
-                            Error::Bus => defmt::error!("I2C bus error"),
-                            Error::Busy => defmt::warn!("I2C bus busy"),
-                            Error::Nack => defmt::error!("I2C NACK"),
-                            _ => defmt::error!("Unknown I2C error")
-                        }
+                        log_i2c_error(err);
                     }
                 }
             }
             */
 
+            /*
             match compass.accel_raw() {
                 Ok(value) => {
                     defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                 }
                 Err(_) => { defmt::error!("Failed to read accelerometer data") }
             }
+            */
 
             match led_state {
                 FlipFlop::Flip => {
@@ -266,7 +295,7 @@ fn main() -> ! {
         }
 
         if !usb_event {
-            wait_for_interrupt(); // TODO: might be slower than necessary
+            // wait_for_interrupt(); // TODO: might be slower than necessary
             continue;
         }
 
@@ -300,6 +329,30 @@ fn main() -> ! {
                 defmt::error!("Failed to send USB data: {}", err);
             }
         };
+    }
+}
+
+fn identify_compass(compass: &mut Compass) {
+    match compass.identify() {
+        Ok(true) => {
+            defmt::info!("LSM303DLHC sensor identification succeeded");
+        }
+        Ok(false) => {
+            defmt::error!("LSM303DLHC sensor identification failed");
+        }
+        Err(err) => {
+            log_i2c_error(err);
+        }
+    };
+}
+
+fn log_i2c_error(err: Error) {
+    match err {
+        Error::Arbitration => defmt::error!("I2C arbitration error"),
+        Error::Bus => defmt::error!("I2C bus error"),
+        Error::Busy => defmt::warn!("I2C bus busy"),
+        Error::Nack => defmt::error!("I2C NACK"),
+        _ => defmt::error!("Unknown I2C error")
     }
 }
 
@@ -346,7 +399,7 @@ fn TIM2() {
         {
             *COUNT += 1;
             if *COUNT == LED_UPDATE_COUNT {
-                LED_FLAG.store(true, Ordering::Release);
+                UPDATE_LED_ROULETTE.store(true, Ordering::Release);
                 *COUNT = 0;
             }
 
@@ -354,4 +407,38 @@ fn TIM2() {
             timer.clear_event(timer::Event::Update);
         }
     })
+}
+
+/// Interrupt for PE2: DRDY of the LSM303DLHC
+///
+/// The external interrupt number maps to the MCU pin number.
+#[interrupt]
+fn EXTI2_TSC() {
+    critical_section::with(|cs| {
+        if let Some(ref mut pin) = PE2_INT
+            .borrow(cs)
+            .borrow_mut()
+            .as_mut()
+        {
+            MAGNETOMETER_READY.store(true, Ordering::Release);
+            pin.clear_interrupt();
+        }
+    });
+}
+
+/// Interrupt for PE4: INT1 of the LSM303DLHC
+///
+/// The external interrupt number maps to the MCU pin number.
+#[interrupt]
+fn EXTI4() {
+    critical_section::with(|cs| {
+        if let Some(ref mut pin) = PE4_INT
+            .borrow(cs)
+            .borrow_mut()
+            .as_mut()
+        {
+            ACCELEROMETER_READY.store(true, Ordering::Release);
+            pin.clear_interrupt();
+        }
+    });
 }

@@ -4,6 +4,7 @@
 use accelerometer::{Accelerometer, RawAccelerometer};
 use accelerometer::vector::{F32x3, I16x3};
 use lsm303dlhc_ng::MagOdr;
+use lsm303dlhc_registers::accel::{AccelOdr, ControlRegister3A, ControlRegister4A, ControlRegister6A};
 use lsm303dlhc_registers::mag::StatusRegisterM;
 use stm32f3xx_hal::gpio;
 use stm32f3xx_hal::gpio::{gpiob, OpenDrain};
@@ -70,7 +71,9 @@ impl Compass {
         Ok(reg)
     }
 
-    pub fn slow_compass(&mut self) -> Result<(), i2c::Error> {
+    /// Make the sensor absurdly slow.
+    pub fn slowpoke(&mut self) -> Result<(), i2c::Error> {
+        self.lsm303dlhc.accel_odr(AccelOdr::Hz1)?;
         self.lsm303dlhc.mag_odr(MagOdr::Hz1_5)
     }
 
@@ -81,6 +84,26 @@ impl Compass {
     /// To obtain float readings, divide by 8 LSB/°C and add an offset, presumably 20°C or 25°C.
     pub fn temp_raw(&mut self) -> Result<i16, i2c::Error> {
         self.lsm303dlhc.temp_raw()
+    }
+
+    /// Enable the interrupts for the accelerometer.
+    pub fn interrupt(&mut self) -> Result<(), i2c::Error> {
+        self.lsm303dlhc.modify_register(|reg: ControlRegister3A| {
+            reg
+                .with_i1drdy1(false)
+                .with_i1drdy2(false)
+        })?;
+        self.lsm303dlhc.modify_register(|reg: ControlRegister4A| {
+            reg.with_block_data_update(false)
+        })?;
+        self.lsm303dlhc.modify_register(|reg: ControlRegister6A| {
+            reg.with_i2int1(false)
+                .with_i2int2(false)
+                .with_boot_i1(false)
+                .with_i2click_en(false)
+                .with_p2_active(false)
+                .with_active_low(false)
+        })
     }
 
     /// Consume the Compass and return the underlying Lsm303dhlc
