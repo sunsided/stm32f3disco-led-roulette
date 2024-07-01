@@ -1,0 +1,36 @@
+\documentclass{standalone}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{tikz-3dplot}
+\usetikzlibrary{backgrounds}
+
+\usepackage{mathpazo}
+
+\begin{document}
+
+% Define the file path of your image
+\newcommand{\imagepath}{reference/stm32f3discovery-top-500x500.jpg}
+
+\begin{tikzpicture}
+    % Assume fixed dimensions for the image
+    \pgfmathsetmacro{\imagewidth}{10}
+    \pgfmathsetmacro{\imageheight}{10}
+
+    % Draw a white background
+    \begin{scope}[on background layer]
+        \fill[white] (-1.0,0) rectangle (\imagewidth,\imageheight);
+    \end{scope}
+
+    % Load the image
+    \node[anchor=south west,inner sep=0] (image) at (0,0) {\includegraphics[width=10cm]{\imagepath}};
+
+    % Define 3D coordinate system directly without extracting image dimensions
+    \begin{scope}[x={(\imagewidth cm,0)}, y={(0,\imageheight cm)}, z={(0cm,0cm,1cm)}, canvas is xy plane at z=0]
+        % Example arrows, you can adjust the coordinates and directions as needed
+        \draw[line width=4mm, red, -stealth] (0.5, 0.55) -- (0.18, 0.2) node[below] {\LARGE \textbf X};
+        \draw[line width=4mm, green, -stealth] (0.5, 0.55) -- (0.9, 0.4) node[below] {\LARGE \textbf Y};
+        \draw[line width=4mm, blue, -stealth] (0.5, 0.55) -- (0.5, 1.0) node[right] {\LARGE \textbf Z};
+    \end{scope}
+\end{tikzpicture}
+
+\end{document}

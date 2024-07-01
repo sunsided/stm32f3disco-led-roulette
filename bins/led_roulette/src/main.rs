@@ -6,6 +6,7 @@
 use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
+use accelerometer::{Accelerometer, RawAccelerometer};
 use cortex_m::asm;
 use cortex_m_rt::entry;
 use cortex_m_semihosting::debug;
@@ -14,15 +15,18 @@ use defmt_rtt as _;
 use panic_probe as _;
 use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
 use stm32f3xx_hal::gpio::{gpioe, Output, PushPull};
+use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
+use crate::compass::Compass;
 use crate::leds::Leds;
 
 mod leds;
+mod compass;
 
 /// Determines how often the timer interrupt should fire.
 const WAKE_UP_EVERY_MS: u16 = 5;
@@ -45,6 +49,7 @@ fn main() -> ! {
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
     let mut gpioa = dp.GPIOA.split(&mut rcc.ahb);
+    let mut gpiob = dp.GPIOB.split(&mut rcc.ahb);
     let mut gpioe = dp.GPIOE.split(&mut rcc.ahb);
 
     // Initialize the system clock(s).
@@ -73,6 +78,11 @@ fn main() -> ! {
     );
     let mut leds = leds.into_array();
 
+    // Initialize the LSM303DLHC/LSM303AGR MEMS e-compass.
+    let mut compass = Compass::new(
+        gpiob.pb6, gpiob.pb7, &mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl, dp.I2C1, clocks, &mut rcc.apb1,
+    ).expect("failed to set up compass");
+
     // Configure a timer to generate interrupts.
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
 
@@ -85,7 +95,7 @@ fn main() -> ! {
 
     // Put the timer in the global context.
     critical_section::with(|cs| {
-        TIMER.borrow(cs).replace(Some(timer));
+        TIMER.replace(cs, Some(timer));
     });
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
@@ -130,8 +140,103 @@ fn main() -> ! {
     let mut curr = 0;
     let mut led_state = FlipFlop::Flip;
 
+    compass.slow_compass().unwrap();
+
+    match compass.identify() {
+        Ok(true) => {
+            defmt::info!("LSM303DLHC sensor identification succeeded");
+        }
+        Ok(false) => {
+            defmt::error!("LSM303DLHC sensor identification failed");
+        }
+        Err(err) => {
+            match err {
+                Error::Arbitration => defmt::error!("I2C arbitration error"),
+                Error::Bus => defmt::error!("I2C bus error"),
+                Error::Busy => defmt::warn!("I2C bus busy"),
+                Error::Nack => defmt::error!("I2C NACK"),
+                _ => defmt::error!("Unknown I2C error")
+            }
+        }
+    };
+
     loop {
+        // Must be called at least every 10 ms, i.e. at 100 Hz.
+        let usb_event = usb_dev.poll(&mut [&mut serial]);
+
         if LED_FLAG.swap(false, Ordering::AcqRel) {
+            /*
+            match compass.temp_raw() {
+                Ok(value) => {
+                    defmt::info!("Received temperature: {} {}°C", value, value as f32 / 8.0 + 25.0)
+                }
+                Err(err) => {
+                    match err {
+                        Error::Arbitration => defmt::error!("I2C arbitration error"),
+                        Error::Bus => defmt::error!("I2C bus error"),
+                        Error::Busy => defmt::warn!("I2C bus busy"),
+                        Error::Nack => defmt::error!("I2C NACK"),
+                        _ => defmt::error!("Unknown I2C error")
+                    }
+                }
+            }
+            */
+
+            /*
+            let drdy = match compass.mag_status() {
+                Ok(status) => {
+                    if status.data_ready() {
+                        defmt::debug!("Compass status: lock = {}, drdy = {}, {:08b}", status.do_lock(), status.data_ready(), status);
+                    }
+                    status.data_ready()
+                }
+                Err(err) => {
+                    match err {
+                        Error::Arbitration => defmt::error!("I2C arbitration error"),
+                        Error::Bus => defmt::error!("I2C bus error"),
+                        Error::Busy => defmt::warn!("I2C bus busy"),
+                        Error::Nack => defmt::error!("I2C NACK"),
+                        _ => defmt::error!("Unknown I2C error")
+                    }
+                    false
+                }
+            };
+
+            if drdy {
+                match compass.mag_raw() {
+                    Ok(value) => {
+                        use micromath::F32Ext;
+
+                        let x = value.x as f32;
+                        let y = value.y as f32;
+                        let z = value.z as f32;
+                        let inv_norm = (x * x + y * y + z * z).invsqrt();
+                        let x = x * inv_norm;
+                        let y = y * inv_norm;
+                        let z = z * inv_norm;
+
+                        defmt::info!("Received compass data: {}, {}, {} - ({}, {}, {})", value.x, value.y, value.z, x, y, z)
+                    }
+                    Err(err) => {
+                        match err {
+                            Error::Arbitration => defmt::error!("I2C arbitration error"),
+                            Error::Bus => defmt::error!("I2C bus error"),
+                            Error::Busy => defmt::warn!("I2C bus busy"),
+                            Error::Nack => defmt::error!("I2C NACK"),
+                            _ => defmt::error!("Unknown I2C error")
+                        }
+                    }
+                }
+            }
+            */
+
+            match compass.accel_raw() {
+                Ok(value) => {
+                    defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
+                }
+                Err(_) => { defmt::error!("Failed to read accelerometer data") }
+            }
+
             match led_state {
                 FlipFlop::Flip => {
                     let next = (curr + 1) % 8;
@@ -146,8 +251,7 @@ fn main() -> ! {
             }
         }
 
-        // Must be called at least every 10 ms, i.e. at 100 Hz.
-        if !usb_dev.poll(&mut [&mut serial]) {
+        if !usb_event {
             wait_for_interrupt(); // TODO: might be slower than necessary
             continue;
         }
