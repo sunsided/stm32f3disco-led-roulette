@@ -4,7 +4,7 @@
 use accelerometer::{Accelerometer, RawAccelerometer};
 use accelerometer::vector::{F32x3, I16x3};
 use lsm303dlhc_ng::MagOdr;
-use lsm303dlhc_registers::mag::{CraRegisterM, StatusRegisterM};
+use lsm303dlhc_registers::mag::StatusRegisterM;
 use stm32f3xx_hal::gpio;
 use stm32f3xx_hal::gpio::{gpiob, OpenDrain};
 use stm32f3xx_hal::i2c;
@@ -71,13 +71,7 @@ impl Compass {
     }
 
     pub fn slow_compass(&mut self) -> Result<(), i2c::Error> {
-        /* self.lsm303dlhc.modify_register(|reg: MrRegisterM| {
-            reg.with_single_conversion(true)
-        })?; */
-
-        self.lsm303dlhc.modify_register(|reg: CraRegisterM| {
-            reg.with_data_output_rate(MagOdr::Hz1_5)
-        })
+        self.lsm303dlhc.mag_odr(MagOdr::Hz1_5)
     }
 
     pub fn identify(&mut self) -> Result<bool, i2c::Error> {

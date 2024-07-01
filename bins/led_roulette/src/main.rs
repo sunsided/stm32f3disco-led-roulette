@@ -160,9 +160,23 @@ fn main() -> ! {
         }
     };
 
+    let mut counter = 0;
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_event = usb_dev.poll(&mut [&mut serial]);
+
+        if counter > 1000 {
+            counter = 0;
+
+            // baud rate is set by the host! :)
+            let line_coding = serial.line_coding();
+            defmt::warn!("data rate: {}", line_coding.data_rate());
+            wait_for_interrupt();
+
+            continue;
+        }
+
+        counter += 1;
 
         if LED_FLAG.swap(false, Ordering::AcqRel) {
             /*
