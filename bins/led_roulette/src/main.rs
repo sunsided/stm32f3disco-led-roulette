@@ -220,7 +220,7 @@ fn main() -> ! {
             }
             */
 
-            match compass.accel_norm() {
+            match compass.accel_raw() {
                 Ok(value) => {
                     defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                 }

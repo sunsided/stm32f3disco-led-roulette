@@ -2,6 +2,9 @@
 \usepackage{graphicx}
 \usepackage{tikz}
 \usepackage{tikz-3dplot}
+\usetikzlibrary{backgrounds}
+
+\usepackage{mathpazo}
 
 \begin{document}
 
@@ -9,23 +12,24 @@
 \newcommand{\imagepath}{reference/stm32f3discovery-top-500x500.jpg}
 
 \begin{tikzpicture}
+    % Assume fixed dimensions for the image
+    \pgfmathsetmacro{\imagewidth}{10}
+    \pgfmathsetmacro{\imageheight}{10}
+
+    % Draw a white background
+    \begin{scope}[on background layer]
+        \fill[white] (-1.0,0) rectangle (\imagewidth,\imageheight);
+    \end{scope}
+
     % Load the image
     \node[anchor=south west,inner sep=0] (image) at (0,0) {\includegraphics[width=10cm]{\imagepath}};
 
-    % Get the width and height of the image
-    \begin{scope}
-        \pgftransformshift{\pgfpointanchor{image}{south west}}
-        \pgfextractx{\imagewidth}{\pgfpointanchor{image}{north east}}
-        \pgfextracty{\imageheight}{\pgfpointanchor{image}{north east}}
-    \end{scope}
-
-    % Define 3D coordinate system
-    \begin{scope}[x={(image.north east)}, y={(image.south west)}, z={(0cm,0cm,1cm)}, canvas is xy plane at z=0]
-        % Adjust the x and y coordinates according to the image's size
+    % Define 3D coordinate system directly without extracting image dimensions
+    \begin{scope}[x={(\imagewidth cm,0)}, y={(0,\imageheight cm)}, z={(0cm,0cm,1cm)}, canvas is xy plane at z=0]
         % Example arrows, you can adjust the coordinates and directions as needed
-        \draw[thick, red, -stealth] (0.1, 0.1) -- (0.3, 0.4);
-        \draw[thick, blue, -stealth] (0.5, 0.5) -- (0.7, 0.2);
-        \draw[thick, green, -stealth] (0.9, 0.9) -- (0.6, 0.7);
+        \draw[line width=4mm, red, -stealth] (0.5, 0.55) -- (0.78, 0.9) node[right] {\LARGE \textbf X};
+        \draw[line width=4mm, green, -stealth] (0.5, 0.55) -- (0.0, 0.7)node[left] {\LARGE \textbf Y};
+        \draw[line width=4mm, blue, -stealth] (0.5, 0.55) -- (0.5, 0.1) node[below] {\LARGE \textbf Z};
     \end{scope}
 \end{tikzpicture}
 

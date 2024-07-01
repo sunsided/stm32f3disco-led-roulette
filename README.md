@@ -13,6 +13,7 @@ This project covers:
 
 - `probe-rs` flashing and `defmt` logging.
 - Driving the user LEDs via a Timer interrupt.
+- Querying the LSM303DLHC MEMS IMU via I2C.
 - Operating a USB CDC serial port for communication.
 
 ## Flashing & Running
@@ -82,3 +83,10 @@ I went the hard way and installed `probe-rs` from sources:
 ```shell
 cargo install probe-rs-tools --git https://github.com/probe-rs/probe-rs --locked
 ```
+
+## Sensor orientation
+
+The onboard LSM303DLHC sensor seems to be oriented in a left-handed coordinate system with X pointing forward
+(towards the USB connectors), Y pointing left and Z pointing down.
+
+![](docs/tikz/orientation.png)
