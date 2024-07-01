@@ -107,7 +107,7 @@ fn main() -> ! {
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
 
     unsafe {
-        cortex_m::peripheral::NVIC::unmask(timer.interrupt());
+        NVIC::unmask(timer.interrupt());
     }
 
     timer.enable_interrupt(timer::Event::Update);
@@ -134,7 +134,7 @@ fn main() -> ! {
     pe4.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
     pe4.enable_interrupt(&mut dp.EXTI);
     let mems_int1_interrupt = pe4.interrupt();
-    unsafe { NVIC::unmask(mems_int1_interrupt) };
+    // unsafe { NVIC::unmask(mems_int1_interrupt) };
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
@@ -178,11 +178,14 @@ fn main() -> ! {
     let mut curr = 0;
     let mut led_state = FlipFlop::Flip;
 
+    // Run a bit of welcoming logic.
+    identify_compass(&mut compass);
+
     // Make the sensor really slow to simplify debugging.
     compass.slowpoke().unwrap();
 
-    // Run a bit of welcoming logic.
-    identify_compass(&mut compass);
+    // Enable interrupts for accerometer data.
+    compass.interrupt().unwrap();
 
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
@@ -292,7 +295,7 @@ fn main() -> ! {
         }
 
         if !usb_event {
-            wait_for_interrupt(); // TODO: might be slower than necessary
+            // wait_for_interrupt(); // TODO: might be slower than necessary
             continue;
         }
 
