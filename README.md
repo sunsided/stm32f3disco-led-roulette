@@ -13,7 +13,8 @@ This project covers:
 
 - `probe-rs` flashing and `defmt` logging.
 - Driving the user LEDs via a Timer interrupt.
-- Querying the LSM303DLHC MEMS IMU via I2C.
+- Querying the LSM303DLHC MEMS IMU via I2C (via [`lsm303dlhc-ng`](https://github.com/sunsided/lsm303dlhc)
+  and [`lsm303dlhc-registers`](https://github.com/sunsided/lsm303dlhc-registers)).
     - Observing the magnetometer's `DRDY` with an `EXTI2_TSC` interrupt.
     - Observing the accelerometer's `I1DRDY1` with an `EXTI4` interrupt.
 - Operating a USB CDC serial port for communication.
