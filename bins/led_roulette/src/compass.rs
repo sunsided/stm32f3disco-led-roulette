@@ -4,7 +4,7 @@
 use accelerometer::{Accelerometer, RawAccelerometer};
 use accelerometer::vector::{F32x3, I16x3};
 use lsm303dlhc_ng::MagOdr;
-use lsm303dlhc_registers::accel::{AccelOdr, ControlRegister3A, ControlRegister5A, ControlRegister6A, FifoControlRegisterA, FifoMode};
+use lsm303dlhc_registers::accel::AccelOdr;
 use lsm303dlhc_registers::mag::StatusRegisterM;
 use stm32f3xx_hal::gpio;
 use stm32f3xx_hal::gpio::{gpiob, OpenDrain};
@@ -53,7 +53,11 @@ impl Compass {
         let sda = pb7.into_af_open_drain(mode, otype, alternate_function_low);
         let i2c = i2c::I2c::new(i2c1, (scl, sda), 400_000.Hz(), clocks, advanced_periph_bus);
 
-        let lsm303dhlc = Lsm303::new(i2c)?;
+        let mut lsm303dhlc = Lsm303::new(i2c)?;
+
+        // Enable accelerometer data ready on PE4.
+        lsm303dhlc.accel_drdy(true)?;
+
         Ok(Compass {
             lsm303dlhc: lsm303dhlc,
         })
@@ -66,6 +70,7 @@ impl Compass {
     }
 
     /// Read the raw magnetometer data
+    #[allow(unused)]
     pub fn mag_status(&mut self) -> Result<StatusRegisterM, i2c::Error> {
         let reg: StatusRegisterM = self.lsm303dlhc.read_register()?;
         Ok(reg)
@@ -84,34 +89,6 @@ impl Compass {
     /// To obtain float readings, divide by 8 LSB/°C and add an offset, presumably 20°C or 25°C.
     pub fn temp_raw(&mut self) -> Result<i16, i2c::Error> {
         self.lsm303dlhc.temp_raw()
-    }
-
-    /// Enable the interrupts for the accelerometer.
-    pub fn interrupt(&mut self) -> Result<(), i2c::Error> {
-        self.lsm303dlhc.modify_register(|reg: ControlRegister3A| {
-            reg
-                .with_i1drdy1(true)
-                .with_i1drdy2(false)
-                .with_i1overrun(false)
-                .with_i1wtm(false)
-        })?;
-        self.lsm303dlhc.modify_register(|reg: FifoControlRegisterA| {
-            reg.with_fifo_mode(FifoMode::Bypass)
-                .with_trigger_on_int2(false)
-                .with_fth(0)
-        })?;
-        self.lsm303dlhc.modify_register(|reg: ControlRegister5A| {
-            reg
-                .with_lir_int1(false)
-                .with_lir_int2(false)
-                .with_fifo_enable(false)
-        })?;
-        self.lsm303dlhc.modify_register(|reg: ControlRegister6A| {
-            reg
-                .with_i2int1(false)
-                .with_p2_active(false)
-        })?;
-        Ok(())
     }
 
     /// Consume the Compass and return the underlying Lsm303dhlc

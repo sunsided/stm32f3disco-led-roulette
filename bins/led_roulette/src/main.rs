@@ -187,22 +187,17 @@ fn main() -> ! {
     // Make the sensor really slow to simplify debugging.
     compass.slowpoke().unwrap();
 
-    // Enable interrupts for accelerometer data.
-    compass.interrupt().unwrap();
-
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_event = usb_dev.poll(&mut [&mut serial]);
 
         // Check for a magnetometer event.
         if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
-            for i in 0..1 {
-                match compass.accel_raw() {
-                    Ok(value) => {
-                        defmt::warn!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
-                    }
-                    Err(_) => { defmt::error!("Failed to read accelerometer data") }
+            match compass.accel_raw() {
+                Ok(value) => {
+                    defmt::warn!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                 }
+                Err(_) => { defmt::error!("Failed to read accelerometer data") }
             }
         }
 
@@ -226,66 +221,20 @@ fn main() -> ! {
                     log_i2c_error(err);
                 }
             }
+
+            match compass.temp_raw() {
+                Ok(value) => {
+                    let base_value = value as f32 / 8.0;
+                    defmt::info!("Received temperature: ±{}°C ({}°C)", base_value, base_value + 20.0)
+                }
+                Err(err) => {
+                    log_i2c_error(err);
+                }
+            }
         }
 
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
-            /*
-            match compass.temp_raw() {
-                Ok(value) => {
-                    defmt::info!("Received temperature: {} {}°C", value, value as f32 / 8.0 + 25.0)
-                }
-                Err(err) => {
-                    log_i2c_error(err);
-                }
-            }
-            */
-
-            /*
-            let drdy = match compass.mag_status() {
-                Ok(status) => {
-                    if status.data_ready() {
-                        defmt::debug!("Compass status: lock = {}, drdy = {}, {:08b}", status.do_lock(), status.data_ready(), status);
-                    }
-                    status.data_ready()
-                }
-                Err(err) => {
-                    log_i2c_error(err);
-                    false
-                }
-            };
-
-            if drdy {
-                match compass.mag_raw() {
-                    Ok(value) => {
-                        use micromath::F32Ext;
-
-                        let x = value.x as f32;
-                        let y = value.y as f32;
-                        let z = value.z as f32;
-                        let inv_norm = (x * x + y * y + z * z).invsqrt();
-                        let x = x * inv_norm;
-                        let y = y * inv_norm;
-                        let z = z * inv_norm;
-
-                        defmt::info!("Received compass data: {}, {}, {} - ({}, {}, {})", value.x, value.y, value.z, x, y, z)
-                    }
-                    Err(err) => {
-                        log_i2c_error(err);
-                    }
-                }
-            }
-            */
-
-            /*
-            match compass.accel_raw() {
-                Ok(value) => {
-                    defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
-                }
-                Err(_) => { defmt::error!("Failed to read accelerometer data") }
-            }
-            */
-
             match led_state {
                 FlipFlop::Flip => {
                     let next = (curr + 1) % 8;
