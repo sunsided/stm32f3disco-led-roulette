@@ -105,10 +105,7 @@ fn main() -> ! {
 
     // Configure a timer to generate interrupts.
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
-
-    unsafe {
-        NVIC::unmask(timer.interrupt());
-    }
+    let timer_interrupt = timer.interrupt();
 
     timer.enable_interrupt(timer::Event::Update);
     timer.start(5.milliseconds());
@@ -117,6 +114,10 @@ fn main() -> ! {
     critical_section::with(|cs| {
         TIMER.replace(cs, Some(timer));
     });
+
+    unsafe {
+        NVIC::unmask(timer_interrupt);
+    }
 
     // Configure PE2 as interrupt source for the LSM303DLHC's DRDY line.
     let mut pe2 = gpioe.pe2.into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
