@@ -3,9 +3,6 @@
 #![no_main]
 #![no_std]
 
-use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, Ordering};
-
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
 use cortex_m::peripheral::NVIC;
@@ -14,20 +11,23 @@ use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
-use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
-use stm32f3xx_hal::gpio::{Edge, gpioe, Gpioe, Input, Output, Pin, PushPull, U};
+use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
 use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
+use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
+use core::cell::RefCell;
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use crate::compass::Compass;
 use crate::leds::Leds;
 
-mod leds;
 mod compass;
+mod leds;
 
 /// Determines how often the timer interrupt should fire.
 const WAKE_UP_EVERY_MS: u16 = 5;
@@ -60,7 +60,12 @@ static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(true);
 
 #[entry]
 fn main() -> ! {
-    defmt::info!("Running {} {} (serial {})", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"), env!("SERIAL"));
+    defmt::info!(
+        "Running {} {} (serial {})",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+        env!("SERIAL")
+    );
 
     let mut dp = pac::Peripherals::take().unwrap();
     let _cp = cortex_m::Peripherals::take().unwrap();
@@ -100,8 +105,16 @@ fn main() -> ! {
 
     // Initialize the LSM303DLHC/LSM303AGR MEMS e-compass.
     let mut compass = Compass::new(
-        gpiob.pb6, gpiob.pb7, &mut gpiob.moder, &mut gpiob.otyper, &mut gpiob.afrl, dp.I2C1, clocks, &mut rcc.apb1,
-    ).expect("failed to set up compass");
+        gpiob.pb6,
+        gpiob.pb7,
+        &mut gpiob.moder,
+        &mut gpiob.otyper,
+        &mut gpiob.afrl,
+        dp.I2C1,
+        clocks,
+        &mut rcc.apb1,
+    )
+    .expect("failed to set up compass");
 
     // Configure a timer to generate interrupts.
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
@@ -120,7 +133,9 @@ fn main() -> ! {
     }
 
     // Configure PE2 as interrupt source for the LSM303DLHC's DRDY line.
-    let mut pe2 = gpioe.pe2.into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
+    let mut pe2 = gpioe
+        .pe2
+        .into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
     syscfg.select_exti_interrupt_source(&pe2);
     pe2.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
     pe2.enable_interrupt(&mut dp.EXTI);
@@ -130,7 +145,9 @@ fn main() -> ! {
     unsafe { NVIC::unmask(mems_drdy_interrupt) };
 
     // Configure PE4 as interrupt source for the LSM303DLHC's INT1 line.
-    let mut pe4 = gpioe.pe4.into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
+    let mut pe4 = gpioe
+        .pe4
+        .into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
     syscfg.select_exti_interrupt_source(&pe4);
     pe4.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
     pe4.enable_interrupt(&mut dp.EXTI);
@@ -173,7 +190,8 @@ fn main() -> ! {
         .serial_number(env!("SERIAL"));
 
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
-        .strings(&[descriptors]).unwrap()
+        .strings(&[descriptors])
+        .unwrap()
         .device_class(USB_CLASS_CDC)
         // .self_powered(false)
         .build();
@@ -195,9 +213,16 @@ fn main() -> ! {
         if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
             match compass.accel_raw() {
                 Ok(value) => {
-                    defmt::warn!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
+                    defmt::warn!(
+                        "Received accelerometer data: {}, {}, {}",
+                        value.x,
+                        value.y,
+                        value.z
+                    )
                 }
-                Err(_) => { defmt::error!("Failed to read accelerometer data") }
+                Err(_) => {
+                    defmt::error!("Failed to read accelerometer data")
+                }
             }
         }
 
@@ -215,7 +240,15 @@ fn main() -> ! {
                     let y = y * inv_norm;
                     let z = z * inv_norm;
 
-                    defmt::info!("Received compass data: {}, {}, {} - ({}, {}, {})", value.x, value.y, value.z, x, y, z)
+                    defmt::info!(
+                        "Received compass data: {}, {}, {} - ({}, {}, {})",
+                        value.x,
+                        value.y,
+                        value.z,
+                        x,
+                        y,
+                        z
+                    )
                 }
                 Err(err) => {
                     log_i2c_error(err);
@@ -225,14 +258,17 @@ fn main() -> ! {
             match compass.temp_raw() {
                 Ok(value) => {
                     let base_value = value as f32 / 8.0;
-                    defmt::info!("Received temperature: ±{}°C ({}°C)", base_value, base_value + 20.0)
+                    defmt::info!(
+                        "Received temperature: ±{}°C ({}°C)",
+                        base_value,
+                        base_value + 20.0
+                    )
                 }
                 Err(err) => {
                     log_i2c_error(err);
                 }
             }
         }
-
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
             match led_state {
@@ -271,7 +307,18 @@ fn main() -> ! {
             }
         };
 
-        match serial.write(&[0x3a, 0x29]) {
+        // Determine the encoding buffer for corncobs.
+        const MAX_ENCODED_SIZE: usize = corncobs::max_encoded_len(2);
+        let mut encoded_buffer = [0_u8; MAX_ENCODED_SIZE];
+
+        // Prepare some data.
+        let data = [0x3a, 0x29]; // :)
+        debug_assert!(data.len() <= MAX_ENCODED_SIZE);
+
+        // Encode the data.
+        let encoded_length = corncobs::encode_buf(&data, &mut encoded_buffer);
+
+        match serial.write(&encoded_buffer[..encoded_length]) {
             Ok(_count) => {
                 // count bytes were written
             }
@@ -307,7 +354,7 @@ fn log_i2c_error(err: Error) {
         Error::Bus => defmt::error!("I2C bus error"),
         Error::Busy => defmt::warn!("I2C bus busy"),
         Error::Nack => defmt::error!("I2C NACK"),
-        _ => defmt::error!("Unknown I2C error")
+        _ => defmt::error!("Unknown I2C error"),
     }
 }
 
@@ -335,7 +382,6 @@ unsafe fn HardFault(_frame: &cortex_m_rt::ExceptionFrame) -> ! {
 pub fn wait_for_interrupt() {
     asm::wfi()
 }
-
 
 #[interrupt]
 fn TIM2() {
@@ -370,11 +416,7 @@ fn TIM2() {
 #[interrupt]
 fn EXTI2_TSC() {
     critical_section::with(|cs| {
-        if let Some(ref mut pin) = PE2_INT
-            .borrow(cs)
-            .borrow_mut()
-            .as_mut()
-        {
+        if let Some(ref mut pin) = PE2_INT.borrow(cs).borrow_mut().as_mut() {
             MAGNETOMETER_READY.store(true, Ordering::Release);
             pin.clear_interrupt();
         } else {
@@ -389,11 +431,7 @@ fn EXTI2_TSC() {
 #[interrupt]
 fn EXTI4() {
     critical_section::with(|cs| {
-        if let Some(ref mut pin) = PE4_INT
-            .borrow(cs)
-            .borrow_mut()
-            .as_mut()
-        {
+        if let Some(ref mut pin) = PE4_INT.borrow(cs).borrow_mut().as_mut() {
             ACCELEROMETER_READY.store(true, Ordering::Release);
             pin.clear_interrupt();
         } else {
