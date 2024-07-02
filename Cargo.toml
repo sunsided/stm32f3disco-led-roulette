@@ -7,10 +7,6 @@ members = [
     "bins/*",
 ]
 
-[patch.crates-io]
-# Woraround for https://github.com/stm32-rs/stm32-usbd/issues/35
-stm32-usbd = { git = "https://github.com/stm32-rs/stm32-usbd.git" }
-
 # cargo build/run
 [profile.dev]
 codegen-units = 1

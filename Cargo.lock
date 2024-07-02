@@ -558,8 +558,9 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stm32-usbd"
-version = "0.6.0"
-source = "git+https://github.com/stm32-rs/stm32-usbd.git#ca23b91d347438d322359f9ff7bc9d8e592f82b8"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef05e917d856a39278e80c50e0b2afcd5dcbcb62ffeeed1a0895d01e6a44ff0d"
 dependencies = [
  "cortex-m",
  "usb-device",
@@ -593,6 +594,7 @@ dependencies = [
  "lsm303dlhc-registers",
  "micromath 2.1.0",
  "panic-probe",
+ "stm32-usbd",
  "stm32f3xx-hal",
  "switch-hal",
  "usb-device",
@@ -602,8 +604,7 @@ dependencies = [
 [[package]]
 name = "stm32f3xx-hal"
 version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c73e8b6e63435b75198d2fe2b27cd7f5c8e0b07bd5da9f82cffddf23210f77f"
+source = "git+https://github.com/sunsided/stm32f3xx-hal?branch=feature/stm32-usbd-0.7.0#1a5ff022601bc6427eff332db6f317df6b76d1c4"
 dependencies = [
  "bxcan",
  "cfg-if",
