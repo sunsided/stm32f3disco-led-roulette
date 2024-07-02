@@ -199,7 +199,7 @@ fn main() -> ! {
             for i in 0..1 {
                 match compass.accel_raw() {
                     Ok(value) => {
-                        defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
+                        defmt::warn!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
                     }
                     Err(_) => { defmt::error!("Failed to read accelerometer data") }
                 }

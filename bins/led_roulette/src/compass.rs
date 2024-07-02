@@ -90,26 +90,21 @@ impl Compass {
     pub fn interrupt(&mut self) -> Result<(), i2c::Error> {
         self.lsm303dlhc.modify_register(|reg: ControlRegister3A| {
             reg
-                .with_i1drdy1(false)
+                .with_i1drdy1(true)
                 .with_i1drdy2(false)
-                .with_i1overrun(true) // FIFO overrun interrupt on INT1
-                .with_i1wtm(true) // FIFO watermark interrupt on INT1
+                .with_i1overrun(false)
+                .with_i1wtm(false)
         })?;
         self.lsm303dlhc.modify_register(|reg: FifoControlRegisterA| {
-            reg.with_fifo_mode(FifoMode::Stream)
+            reg.with_fifo_mode(FifoMode::Bypass)
                 .with_trigger_on_int2(false)
-                .with_fth(3)
-            // TODO: This FTH value now controls WHEN the system will lock up. Higher number, later freeze.
-            //      This seems to indicate that the interrupt works, but our handling is incorrect.
-            //      In i1wtm enabled mode (with overrun disabled), the system freezes up after the configured watermarks.
-            //      In i1overrun mode (with watermark disabled), the system freezes up at a much later point in time,
-            //      that the FIFO is indeed written full, and then the interrupt occurs.
+                .with_fth(0)
         })?;
         self.lsm303dlhc.modify_register(|reg: ControlRegister5A| {
             reg
                 .with_lir_int1(false)
                 .with_lir_int2(false)
-                .with_fifo_enable(true)
+                .with_fifo_enable(false)
         })?;
         self.lsm303dlhc.modify_register(|reg: ControlRegister6A| {
             reg
