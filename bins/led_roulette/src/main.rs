@@ -52,11 +52,11 @@ static UPDATE_LED_ROULETTE: AtomicBool = AtomicBool::new(false);
 
 /// Indicates whether magnetometer data is ready.
 /// This is indicated by an interrupt on the [`PE2_INT`] pin and flagged in the `EXTI2_TSC` handler.
-static MAGNETOMETER_READY: AtomicBool = AtomicBool::new(false);
+static MAGNETOMETER_READY: AtomicBool = AtomicBool::new(true);
 
 /// Indicates whether accelerometer data is ready.
 /// This is indicated by an interrupt on the [`PE4_INT`] pin and flagged in the `EXTI4` handler.
-static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(false);
+static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(true);
 
 #[entry]
 fn main() -> ! {
@@ -134,7 +134,7 @@ fn main() -> ! {
     pe4.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
     pe4.enable_interrupt(&mut dp.EXTI);
     let mems_int1_interrupt = pe4.interrupt();
-    // unsafe { NVIC::unmask(mems_int1_interrupt) };
+    unsafe { NVIC::unmask(mems_int1_interrupt) };
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
     // Pull the D+ pin down to send a RESET condition to the USB bus.
@@ -184,12 +184,24 @@ fn main() -> ! {
     // Make the sensor really slow to simplify debugging.
     compass.slowpoke().unwrap();
 
-    // Enable interrupts for accerometer data.
+    // Enable interrupts for accelerometer data.
     compass.interrupt().unwrap();
 
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_event = usb_dev.poll(&mut [&mut serial]);
+
+        // Check for a magnetometer event.
+        if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
+            for i in 0..1 {
+                match compass.accel_raw() {
+                    Ok(value) => {
+                        defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
+                    }
+                    Err(_) => { defmt::error!("Failed to read accelerometer data") }
+                }
+            }
+        }
 
         // Check for a magnetometer event.
         if MAGNETOMETER_READY.swap(false, Ordering::AcqRel) {
@@ -213,15 +225,6 @@ fn main() -> ! {
             }
         }
 
-        // Check for a magnetometer event.
-        if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
-            match compass.accel_raw() {
-                Ok(value) => {
-                    defmt::info!("Received accelerometer data: {}, {}, {}", value.x, value.y, value.z)
-                }
-                Err(_) => { defmt::error!("Failed to read accelerometer data") }
-            }
-        }
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
             /*
@@ -422,6 +425,7 @@ fn EXTI2_TSC() {
         {
             MAGNETOMETER_READY.store(true, Ordering::Release);
             pin.clear_interrupt();
+            defmt::debug!("EXTI2 fired");
         }
     });
 }
@@ -439,6 +443,7 @@ fn EXTI4() {
         {
             ACCELEROMETER_READY.store(true, Ordering::Release);
             pin.clear_interrupt();
+            defmt::warn!("EXTI4 fired");
         }
     });
 }
