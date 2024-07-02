@@ -135,6 +135,8 @@ fn main() -> ! {
     pe4.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
     pe4.enable_interrupt(&mut dp.EXTI);
     let mems_int1_interrupt = pe4.interrupt();
+
+    critical_section::with(|cs| *PE4_INT.borrow(cs).borrow_mut() = Some(pe4));
     unsafe { NVIC::unmask(mems_int1_interrupt) };
 
     // F3 Discovery board has a pull-up resistor on the D+ line.
@@ -426,7 +428,8 @@ fn EXTI2_TSC() {
         {
             MAGNETOMETER_READY.store(true, Ordering::Release);
             pin.clear_interrupt();
-            defmt::debug!("EXTI2 fired");
+        } else {
+            defmt::error!("PE2_INT not set up");
         }
     });
 }
@@ -444,7 +447,8 @@ fn EXTI4() {
         {
             ACCELEROMETER_READY.store(true, Ordering::Release);
             pin.clear_interrupt();
-            defmt::warn!("EXTI4 fired");
+        } else {
+            defmt::error!("PE4_INT not set up");
         }
     });
 }
