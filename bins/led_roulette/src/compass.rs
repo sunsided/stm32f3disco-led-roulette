@@ -101,6 +101,9 @@ impl Compass {
                 .with_fth(3)
             // TODO: This FTH value now controls WHEN the system will lock up. Higher number, later freeze.
             //      This seems to indicate that the interrupt works, but our handling is incorrect.
+            //      In i1wtm enabled mode (with overrun disabled), the system freezes up after the configured watermarks.
+            //      In i1overrun mode (with watermark disabled), the system freezes up at a much later point in time,
+            //      that the FIFO is indeed written full, and then the interrupt occurs.
         })?;
         self.lsm303dlhc.modify_register(|reg: ControlRegister5A| {
             reg
