@@ -14,7 +14,37 @@ This project covers:
 - `probe-rs` flashing and `defmt` logging.
 - Driving the user LEDs via a Timer interrupt.
 - Querying the LSM303DLHC MEMS IMU via I2C.
+    - Observing the magnetometer's `DRDY` with an `EXTI2_TSC` interrupt.
+    - Observing the accelerometer's `I1DRDY1` with an `EXTI4` interrupt.
 - Operating a USB CDC serial port for communication.
+
+## Sensor orientation
+
+The onboard LSM303DLHC's accelerometer sensor seems to be oriented in a left-handed coordinate system:
+
+- X points forward (towards the USB connectors)
+    - When pointing the USB ports downwards, the sensors reads a positive maximum on the
+      X axis.
+    - When pointing the opposite end downwards, the sensor reads a negative maximum on the X axis.
+- Y points left
+    - When pointing the left side downwards, the sensor reads a positive maximum on the Y axis.
+- Z points down
+    - When pointing the bottom side downwards, the sensor reads a positive maximum on the Z axis.
+
+The magnetometer on the other hand - pun not intended - appears to use a right-handed coordinate system :
+
+- X points backward (towards the LEDs)
+    - When pointing the USB ports towards the earth's magnetic field vector, the sensors reads a negative maximum on the
+      X axis.
+    - When pointing the opposite end towards the vector, the sensor reads a positive maximum on the X axis.
+- Y points right
+    - When pointing the right side towards the vector, the sensor reads a positive maximum on the Y axis.
+- Z points up
+    - When pointing the top side towards the vector, the sensor reads a positive maximum on the Z axis.
+
+| Accelerometer                    | Magnetometer                    |
+|----------------------------------|---------------------------------|
+| ![](docs/tikz/accelerometer.png) | ![](docs/tikz/magnetometer.png) ||
 
 ## Flashing & Running
 
@@ -83,31 +113,3 @@ I went the hard way and installed `probe-rs` from sources:
 ```shell
 cargo install probe-rs-tools --git https://github.com/probe-rs/probe-rs --locked
 ```
-
-## Sensor orientation
-
-The onboard LSM303DLHC's accelerometer sensor seems to be oriented in a left-handed coordinate system:
-
-- X points forward (towards the USB connectors)
-    - When pointing the USB ports downwards, the sensors reads a positive maximum on the
-      X axis.
-    - When pointing the opposite end downwards, the sensor reads a negative maximum on the X axis.
-- Y points left
-    - When pointing the left side downwards, the sensor reads a positive maximum on the Y axis.
-- Z points down
-    - When pointing the bottom side downwards, the sensor reads a positive maximum on the Z axis.
-
-The magnetometer on the other hand - pun not intended - appears to use a right-handed coordinate system :
-
-- X points backward (towards the LEDs)
-    - When pointing the USB ports towards the earth's magnetic field vector, the sensors reads a negative maximum on the
-      X axis.
-    - When pointing the opposite end towards the vector, the sensor reads a positive maximum on the X axis.
-- Y points right
-    - When pointing the right side towards the vector, the sensor reads a positive maximum on the Y axis.
-- Z points up
-    - When pointing the top side towards the vector, the sensor reads a positive maximum on the Z axis.
-
-| Accelerometer                    | Magnetometer                    |
-|----------------------------------|---------------------------------|
-| ![](docs/tikz/accelerometer.png) | ![](docs/tikz/magnetometer.png) ||

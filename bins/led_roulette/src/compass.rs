@@ -4,7 +4,7 @@
 use accelerometer::{Accelerometer, RawAccelerometer};
 use accelerometer::vector::{F32x3, I16x3};
 use lsm303dlhc_ng::MagOdr;
-use lsm303dlhc_registers::accel::{AccelOdr, ControlRegister3A, ControlRegister4A, ControlRegister6A};
+use lsm303dlhc_registers::accel::{AccelOdr, ControlRegister3A, ControlRegister5A, ControlRegister6A, FifoControlRegisterA, FifoMode};
 use lsm303dlhc_registers::mag::StatusRegisterM;
 use stm32f3xx_hal::gpio;
 use stm32f3xx_hal::gpio::{gpiob, OpenDrain};
@@ -90,20 +90,28 @@ impl Compass {
     pub fn interrupt(&mut self) -> Result<(), i2c::Error> {
         self.lsm303dlhc.modify_register(|reg: ControlRegister3A| {
             reg
-                .with_i1drdy1(false)
+                .with_i1drdy1(true)
                 .with_i1drdy2(false)
+                .with_i1overrun(false)
+                .with_i1wtm(false)
         })?;
-        self.lsm303dlhc.modify_register(|reg: ControlRegister4A| {
-            reg.with_block_data_update(false)
+        self.lsm303dlhc.modify_register(|reg: FifoControlRegisterA| {
+            reg.with_fifo_mode(FifoMode::Bypass)
+                .with_trigger_on_int2(false)
+                .with_fth(0)
+        })?;
+        self.lsm303dlhc.modify_register(|reg: ControlRegister5A| {
+            reg
+                .with_lir_int1(false)
+                .with_lir_int2(false)
+                .with_fifo_enable(false)
         })?;
         self.lsm303dlhc.modify_register(|reg: ControlRegister6A| {
-            reg.with_i2int1(false)
-                .with_i2int2(false)
-                .with_boot_i1(false)
-                .with_i2click_en(false)
+            reg
+                .with_i2int1(false)
                 .with_p2_active(false)
-                .with_active_low(false)
-        })
+        })?;
+        Ok(())
     }
 
     /// Consume the Compass and return the underlying Lsm303dhlc
