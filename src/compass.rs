@@ -1,8 +1,8 @@
 // Original source: https://github.com/rubberduck203/stm32f3-discovery/blob/45c7f1b4375d6c4b7ab4f70d5699323d6feb98cc/src/compass.rs
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use accelerometer::{Accelerometer, RawAccelerometer};
 use accelerometer::vector::{F32x3, I16x3};
+use accelerometer::{Accelerometer, RawAccelerometer};
 use lsm303dlhc_ng::MagOdr;
 use lsm303dlhc_registers::accel::AccelOdr;
 use lsm303dlhc_registers::mag::StatusRegisterM;

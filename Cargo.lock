@@ -95,6 +95,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "corncobs"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9236877021b66ad90f833d8a73a7acb702b985b64c5986682d9f1f1a184f0fb"
+
+[[package]]
 name = "cortex-m"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -584,6 +590,7 @@ name = "stm32f3disco-led-roulette"
 version = "0.1.0"
 dependencies = [
  "accelerometer",
+ "corncobs",
  "cortex-m",
  "cortex-m-rt",
  "cortex-m-semihosting",
