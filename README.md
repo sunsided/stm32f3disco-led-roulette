@@ -1,9 +1,10 @@
 # STM32F3 Discovery
 
 The LED Roulette example on the [STM32F3 Discovery](https://www.st.com/en/evaluation-tools/stm32f3discovery.html) board,
+on steroids,
 written in Rust. An experiment to get started with embedded development in Rust, as well as testing the IDE based
 development
-and debugging experience in JetBrains CLion while using Rust.
+and debugging experience in JetBrains ~~CLion while using Rust~~ RustRover.
 
 <div align="center">
   <img src="docs/led-roulette.webp" alt="Moving LEDs on the STM32F3 Discovery board"/>
