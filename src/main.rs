@@ -207,7 +207,9 @@ fn main() -> ! {
     identify_compass(&mut compass);
 
     // Make the sensor really slow to simplify debugging.
-    compass.slowpoke().unwrap();
+    if cfg!(feature = "slowpoke") {
+        compass.slowpoke().unwrap();
+    }
 
     let mut total_events: u32 = 0;
 
