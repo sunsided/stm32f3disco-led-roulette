@@ -1,4 +1,4 @@
-# STM32F3 Discovery
+# STM32F3 Discovery 🦀⚡
 
 The LED Roulette example on the [STM32F3 Discovery](https://www.st.com/en/evaluation-tools/stm32f3discovery.html) board,
 on steroids,
@@ -19,6 +19,9 @@ This project covers:
     - Observing the magnetometer's `DRDY` with an `EXTI2_TSC` interrupt.
     - Observing the accelerometer's `I1DRDY1` with an `EXTI4` interrupt.
 - Operating a USB CDC serial port for communication.
+    - Uses [serial-sensors-proto](https://github.com/sunsided/serial-sensors-proto) to serialize and byte-stuff
+      the sensor readings and hands them over to [serial-sensors](https://github.com/sunsided/serial-sensors)
+      for further shenanigans.
 
 ## Sensor orientation
 
