@@ -14,10 +14,10 @@ use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
-use serial_sensors_proto::scalar::ScalarData;
 use serial_sensors_proto::types::{AccelerometerI16, MagnetometerI16, TemperatureI16};
-use serial_sensors_proto::vector3::Vector3Data;
 use serial_sensors_proto::versions::Version1DataFrame;
+use serial_sensors_proto::ScalarData;
+use serial_sensors_proto::Vector3Data;
 use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
 use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
@@ -33,6 +33,7 @@ use crate::utils::Millis;
 
 mod compass;
 mod leds;
+mod sensor_out_buffer;
 mod utils;
 
 /// Determines how often the timer interrupt should fire.
