@@ -29,15 +29,17 @@ use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use crate::compass::Compass;
 use crate::leds::Leds;
+use crate::utils::Millis;
 
 mod compass;
 mod leds;
+mod utils;
 
 /// Determines how often the timer interrupt should fire.
-const WAKE_UP_EVERY_MS: u16 = 5;
+const WAKE_UP_EVERY_MS: Millis = Millis::new(1);
 
 /// Determines the duration between LED updates.
-const DRIVE_LED_EVERY_MS: u16 = 30;
+const DRIVE_LED_EVERY_MS: Millis = Millis::new(30);
 
 pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
@@ -125,7 +127,7 @@ fn main() -> ! {
     let timer_interrupt = timer.interrupt();
 
     timer.enable_interrupt(timer::Event::Update);
-    timer.start(5.milliseconds());
+    timer.start(WAKE_UP_EVERY_MS.milliseconds());
 
     // Put the timer in the global context.
     critical_section::with(|cs| {
@@ -392,7 +394,8 @@ fn main() -> ! {
                     }
                 };
             } else {
-                // wait_for_interrupt();
+                wait_for_interrupt();
+                continue;
             }
         }
 
@@ -474,8 +477,8 @@ pub fn wait_for_interrupt() {
 
 #[interrupt]
 fn TIM2() {
-    static mut COUNT: u16 = 0;
-    const LED_UPDATE_COUNT: u16 = DRIVE_LED_EVERY_MS / WAKE_UP_EVERY_MS;
+    static mut COUNT: u32 = 0;
+    const LED_UPDATE_COUNT: u32 = DRIVE_LED_EVERY_MS.div(WAKE_UP_EVERY_MS);
 
     // Just handle the pending interrupt event.
     critical_section::with(|cs| {
