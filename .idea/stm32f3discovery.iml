@@ -5,6 +5,7 @@
       <sourceFolder url="file://$MODULE_DIR$/bins/led_roulette/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/led_roulette_aux/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/stm32f3_discovery/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

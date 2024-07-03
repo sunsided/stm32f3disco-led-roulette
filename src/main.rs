@@ -3,6 +3,9 @@
 #![no_main]
 #![no_std]
 
+use core::cell::RefCell;
+use core::sync::atomic::{AtomicBool, Ordering};
+
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
 use cortex_m::peripheral::NVIC;
@@ -11,6 +14,10 @@ use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
+use serial_sensors_proto::scalar::ScalarData;
+use serial_sensors_proto::types::{AccelerometerI16, MagnetometerI16, TemperatureI16};
+use serial_sensors_proto::vector3::Vector3Data;
+use serial_sensors_proto::versions::Version1DataFrame;
 use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
 use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
@@ -19,9 +26,6 @@ use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
-
-use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::compass::Compass;
 use crate::leds::Leds;
@@ -205,6 +209,20 @@ fn main() -> ! {
     // Make the sensor really slow to simplify debugging.
     compass.slowpoke().unwrap();
 
+    let mut total_events: u32 = 0;
+
+    let mut accel_events: u32 = 0;
+    let mut accelerometer = None;
+
+    let mut mag_events: u32 = 0;
+    let mut magnetometer = None;
+
+    let mut temp_events: u32 = 0;
+    let mut temperature = None;
+
+    let mut transmit_buffer = [0_u8; 64];
+    let mut write_remaining = 0..0;
+
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_event = usb_dev.poll(&mut [&mut serial]);
@@ -213,6 +231,13 @@ fn main() -> ! {
         if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
             match compass.accel_raw() {
                 Ok(value) => {
+                    accelerometer = Some(AccelerometerI16::new(Vector3Data {
+                        x: value.x,
+                        y: value.y,
+                        z: value.z,
+                    }));
+                    accel_events = accel_events.wrapping_add(1);
+
                     defmt::warn!(
                         "Received accelerometer data: {}, {}, {}",
                         value.x,
@@ -230,6 +255,13 @@ fn main() -> ! {
         if MAGNETOMETER_READY.swap(false, Ordering::AcqRel) {
             match compass.mag_raw() {
                 Ok(value) => {
+                    magnetometer = Some(MagnetometerI16::new(Vector3Data {
+                        x: value.x,
+                        y: value.y,
+                        z: value.z,
+                    }));
+                    mag_events = mag_events.wrapping_add(1);
+
                     use micromath::F32Ext;
 
                     let x = value.x as f32;
@@ -257,6 +289,9 @@ fn main() -> ! {
 
             match compass.temp_raw() {
                 Ok(value) => {
+                    temperature = Some(TemperatureI16::new(ScalarData { value }));
+                    temp_events = temp_events.wrapping_add(1);
+
                     let base_value = value as f32 / 8.0;
                     defmt::info!(
                         "Received temperature: ±{}°C ({}°C)",
@@ -285,8 +320,8 @@ fn main() -> ! {
             }
         }
 
-        if !usb_event {
-            // wait_for_interrupt(); // TODO: might be slower than necessary
+        let has_data = accelerometer.is_some() || magnetometer.is_some() || temperature.is_some();
+        if !usb_event && !has_data {
             continue;
         }
 
@@ -307,30 +342,82 @@ fn main() -> ! {
             }
         };
 
-        // Determine the encoding buffer for corncobs.
-        const MAX_ENCODED_SIZE: usize = corncobs::max_encoded_len(2);
-        let mut encoded_buffer = [0_u8; MAX_ENCODED_SIZE];
+        // Only serialize when there's nothing more to write.
+        if write_remaining.is_empty() {
+            if let Some(accelerometer) = accelerometer.take() {
+                total_events = total_events.wrapping_add(1);
 
-        // Prepare some data.
-        let data = [0x3a, 0x29]; // :)
-        debug_assert!(data.len() <= MAX_ENCODED_SIZE);
+                let frame = Version1DataFrame::new(
+                    total_events,
+                    accel_events,
+                    lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                    accelerometer,
+                );
+                match serial_sensors_proto::serialize(frame, &mut transmit_buffer) {
+                    Ok(range) => write_remaining = range,
+                    Err(_err) => {
+                        defmt::error!("A serialization error occurred");
+                    }
+                };
+            } else if let Some(magnetometer) = magnetometer.take() {
+                total_events = total_events.wrapping_add(1);
 
-        // Encode the data.
-        let encoded_length = corncobs::encode_buf(&data, &mut encoded_buffer);
+                let frame = Version1DataFrame::new(
+                    total_events,
+                    accel_events,
+                    lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                    magnetometer,
+                );
+                match serial_sensors_proto::serialize(frame, &mut transmit_buffer) {
+                    Ok(range) => write_remaining = range,
+                    Err(_err) => {
+                        defmt::error!("A serialization error occurred");
+                    }
+                };
+            } else if let Some(temperature) = temperature.take() {
+                total_events = total_events.wrapping_add(1);
 
-        match serial.write(&encoded_buffer[..encoded_length]) {
-            Ok(_count) => {
-                // count bytes were written
+                let frame = Version1DataFrame::new(
+                    total_events,
+                    accel_events,
+                    lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                    temperature,
+                );
+                match serial_sensors_proto::serialize(frame, &mut transmit_buffer) {
+                    Ok(range) => write_remaining = range,
+                    Err(_err) => {
+                        defmt::error!("A serialization error occurred");
+                    }
+                };
+            } else {
+                // wait_for_interrupt();
             }
-            Err(UsbError::WouldBlock) => {
-                // No data could be written (buffers full)
-                defmt::trace!("Buffer full while writing USB data");
-            }
-            Err(err) => {
-                // An error occurred
-                defmt::error!("Failed to send USB data: {}", err);
-            }
-        };
+        }
+
+        // serial_sensors_proto::serialize()
+        if !write_remaining.is_empty() {
+            match serial.write(&transmit_buffer[write_remaining.clone()]) {
+                Ok(count) => {
+                    // count bytes were written
+                    write_remaining = (write_remaining.start + count)..write_remaining.end;
+                    if !write_remaining.is_empty() {
+                        defmt::warn!(
+                            "Couldn't write completely, range is now {} (length {})",
+                            write_remaining,
+                            write_remaining.len()
+                        );
+                    }
+                }
+                Err(UsbError::WouldBlock) => {
+                    // No data could be written (buffers full)
+                    defmt::trace!("Buffer full while writing USB data");
+                }
+                Err(err) => {
+                    // An error occurred
+                    defmt::error!("Failed to send USB data: {}", err);
+                }
+            };
+        }
     }
 }
 
