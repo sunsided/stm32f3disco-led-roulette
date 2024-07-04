@@ -14,9 +14,7 @@ use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
 use panic_probe as _;
-use serial_sensors_proto::types::{AccelerometerI16, MagnetometerI16, TemperatureI16};
-use serial_sensors_proto::ScalarData;
-use serial_sensors_proto::Vector3Data;
+use serial_sensors_proto::{ScalarData, Vector3Data};
 use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
 use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
@@ -315,7 +313,7 @@ fn main() -> ! {
 fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
     match compass.temp_raw() {
         Ok(value) => {
-            sensor_buffer.update_temp(TemperatureI16::new(ScalarData::new(value)));
+            sensor_buffer.update_temp(ScalarData::new(value));
 
             let base_value = value as f32 / 8.0;
             defmt::info!(
@@ -333,9 +331,7 @@ fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutB
 fn handle_magnetometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
     match compass.mag_raw() {
         Ok(value) => {
-            sensor_buffer.update_mag(MagnetometerI16::new(Vector3Data::new(
-                value.x, value.y, value.z,
-            )));
+            sensor_buffer.update_mag(Vector3Data::new(value.x, value.y, value.z));
 
             use micromath::F32Ext;
             let x = value.x as f32;
@@ -365,9 +361,7 @@ fn handle_magnetometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOut
 fn handle_accelerometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
     match compass.accel_raw() {
         Ok(value) => {
-            sensor_buffer.update_accel(AccelerometerI16::new(Vector3Data::new(
-                value.x, value.y, value.z,
-            )));
+            sensor_buffer.update_accel(Vector3Data::new(value.x, value.y, value.z));
             defmt::info!(
                 "Received accelerometer data: {}, {}, {}",
                 value.x,
