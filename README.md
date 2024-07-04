@@ -23,6 +23,15 @@ This project covers:
       the sensor readings and hands them over to [serial-sensors](https://github.com/sunsided/serial-sensors)
       for further shenanigans.
 
+## Bin features
+
+The sensors are set up to provide data at up to 400 Hz, which can make debugging complicated.
+To slow things down, enter `slowpoke` mode:
+
+```shell
+cargo run --features=slowpoke
+```
+
 ## Sensor orientation
 
 The onboard LSM303DLHC's accelerometer sensor seems to be oriented in a left-handed coordinate system:

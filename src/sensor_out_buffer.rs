@@ -285,13 +285,13 @@ impl SensorOutBuffer {
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                         LinearRangeInfo::new(LinearRanges {
                             target: TEMP_SENSOR_ID,
-                            // (2*2^11)/(8*(80- -40)) + 20 = 26.023529411764706
+                            // (2*2^11)/(8*(80- -40)) + 25 = 31.023529411764706
                             resolution_bits: 12,
                             lsb_per_unit: 8, // 8 LSB/°C
                             meas_range_max: 80,
                             meas_range_min: -40,
                             range_decimals: 0, // range is times 10^0
-                            offset: 20,
+                            offset: 25,
                             offset_decimals: 0,
                         }),
                     ))

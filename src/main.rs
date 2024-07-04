@@ -325,11 +325,12 @@ fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutB
         Ok(value) => {
             sensor_buffer.update_temp(ScalarData::new(value));
 
-            let base_value = value as f32 / 8.0;
+            let base_value = value as f32 / (8.0 * (80.0 - -40.0));
             defmt::info!(
-                "Received temperature: ±{}°C ({}°C)",
+                "Received temperature: {} = ±{}°C ({}°C)",
+                value,
                 base_value,
-                base_value + 20.0
+                base_value + 25.0
             )
         }
         Err(err) => {
