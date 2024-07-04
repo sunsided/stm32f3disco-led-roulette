@@ -189,12 +189,8 @@ impl SensorOutBuffer {
                         lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
                         LinearRangeInfo::new(LinearRanges {
                             target: ACCEL_SENSOR_ID,
-                            // (2*2^15)/(16384*(2- -2) = 1
-                            resolution_bits: 16,
-                            lsb_per_unit: 16384, // (2*32767)/(4 g)
-                            meas_range_max: 2,   // + 2 g
-                            meas_range_min: -2,  // - 2 g
-                            range_decimals: 0,   // range is +/- 2*10^0
+                            resolution_bits: 12,
+                            scale: 16384,
                             ..Default::default()
                         }),
                     ))
@@ -237,12 +233,8 @@ impl SensorOutBuffer {
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                         LinearRangeInfo::new(LinearRanges {
                             target: MAG_SENSOR_ID,
-                            // e.g. (2*2^11)/(1100*(1.3- -1.3)) = 1.43... Gauss
-                            resolution_bits: 12, // -2048 .. 2047
-                            lsb_per_unit: 1100,  // LSB/Gauss
-                            meas_range_max: 13,  // + 1.3 Gauss
-                            meas_range_min: -13, // - 1.3 Gauss
-                            range_decimals: 1,   // range is +/- 1.3*10^-1
+                            resolution_bits: 12,
+                            scale: 1100,
                             ..Default::default()
                         }),
                     ))
@@ -285,14 +277,10 @@ impl SensorOutBuffer {
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                         LinearRangeInfo::new(LinearRanges {
                             target: TEMP_SENSOR_ID,
-                            // (2*2^11)/(8*(80- -40)) + 25 = 31.023529411764706
                             resolution_bits: 12,
-                            lsb_per_unit: 8, // 8 LSB/°C
-                            meas_range_max: 80,
-                            meas_range_min: -40,
-                            range_decimals: 0, // range is times 10^0
-                            offset: 25,
-                            offset_decimals: 0,
+                            scale: 8,
+                            offset: 20,
+                            ..Default::default()
                         }),
                     ))
                 }
