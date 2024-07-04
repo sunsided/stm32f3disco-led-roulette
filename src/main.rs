@@ -27,7 +27,7 @@ use usbd_serial::{SerialPort, USB_CLASS_CDC};
 use crate::compass::Compass;
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
-use crate::utils::Millis;
+use crate::utils::{Micros, Millis};
 
 mod compass;
 mod leds;
@@ -35,7 +35,7 @@ mod sensor_out_buffer;
 mod utils;
 
 /// Determines how often the timer interrupt should fire.
-const WAKE_UP_EVERY_MS: Millis = Millis::new(1);
+const WAKE_UP_EVERY_US: Micros = Micros::new(100);
 
 /// Determines the duration between LED updates.
 const DRIVE_LED_EVERY_MS: Millis = Millis::new(30);
@@ -126,7 +126,7 @@ fn main() -> ! {
     let timer_interrupt = timer.interrupt();
 
     timer.enable_interrupt(timer::Event::Update);
-    timer.start(WAKE_UP_EVERY_MS.milliseconds());
+    timer.start(WAKE_UP_EVERY_US.microseconds());
 
     // Put the timer in the global context.
     critical_section::with(|cs| {
@@ -437,7 +437,7 @@ pub fn wait_for_interrupt() {
 #[interrupt]
 fn TIM2() {
     static mut COUNT: u32 = 0;
-    const LED_UPDATE_COUNT: u32 = DRIVE_LED_EVERY_MS.div(WAKE_UP_EVERY_MS);
+    const LED_UPDATE_COUNT: u32 = DRIVE_LED_EVERY_MS.div(WAKE_UP_EVERY_US);
 
     // Just handle the pending interrupt event.
     critical_section::with(|cs| {

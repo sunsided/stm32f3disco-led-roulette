@@ -96,7 +96,31 @@ impl SensorOutBuffer {
         }
 
         // Send identification frames first, if we can.
-        let frame = if self.remaining_identifiers > 0 {
+        let frame = if let Some(accelerometer) = self.accelerometer.take() {
+            self.increment_total_events();
+            Some(Version1DataFrame::new(
+                self.total_events,
+                self.accel_events,
+                lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                accelerometer,
+            ))
+        } else if let Some(magnetometer) = self.magnetometer.take() {
+            self.increment_total_events();
+            Some(Version1DataFrame::new(
+                self.total_events,
+                self.mag_events,
+                lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                magnetometer,
+            ))
+        } else if let Some(temperature) = self.temperature.take() {
+            self.increment_total_events();
+            Some(Version1DataFrame::new(
+                self.total_events,
+                self.temp_events,
+                lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                temperature,
+            ))
+        } else if self.remaining_identifiers > 0 {
             match self.remaining_identifiers {
                 // Board
                 1 => {
@@ -277,30 +301,6 @@ impl SensorOutBuffer {
                     None
                 }
             }
-        } else if let Some(accelerometer) = self.accelerometer.take() {
-            self.increment_total_events();
-            Some(Version1DataFrame::new(
-                self.total_events,
-                self.accel_events,
-                lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
-                accelerometer,
-            ))
-        } else if let Some(magnetometer) = self.magnetometer.take() {
-            self.increment_total_events();
-            Some(Version1DataFrame::new(
-                self.total_events,
-                self.mag_events,
-                lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
-                magnetometer,
-            ))
-        } else if let Some(temperature) = self.temperature.take() {
-            self.increment_total_events();
-            Some(Version1DataFrame::new(
-                self.total_events,
-                self.temp_events,
-                lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
-                temperature,
-            ))
         } else {
             None
         };
