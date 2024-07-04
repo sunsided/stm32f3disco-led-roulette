@@ -3,10 +3,10 @@
 use core::ops::Range;
 
 use serial_sensors_proto::types::{
-    AccelerometerI16, Identification, MagnetometerI16, TemperatureI16,
+    AccelerometerI16, Identification, LinearRangeInfo, MagnetometerI16, TemperatureI16,
 };
 use serial_sensors_proto::versions::Version1DataFrame;
-use serial_sensors_proto::{Identifier, IdentifierCode, SensorId, SensorIds};
+use serial_sensors_proto::{Identifier, IdentifierCode, LinearRanges, SensorId, SensorIds};
 
 const BUFFER_SIZE: usize = 192;
 const ACCEL_SENSOR_ID: SensorId = SensorIds::ACCELEROMETERI16
@@ -156,8 +156,27 @@ impl SensorOutBuffer {
                         )),
                     ))
                 }
-                // Magnetometer
                 5 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                        LinearRangeInfo::new(LinearRanges {
+                            target: ACCEL_SENSOR_ID,
+                            // (2*2^15)/(16384*(2- -2) = 1
+                            resolution_bits: 16,
+                            lsb_per_unit: 16384, // (2*32767)/(4 g)
+                            meas_range_max: 2,   // + 2 g
+                            meas_range_min: -2,  // - 2 g
+                            range_decimals: 0,   // range is +/- 2*10^0
+                            ..Default::default()
+                        }),
+                    ))
+                }
+                // Magnetometer
+                6 => {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
@@ -171,7 +190,7 @@ impl SensorOutBuffer {
                         )),
                     ))
                 }
-                6 => {
+                7 => {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
@@ -182,21 +201,6 @@ impl SensorOutBuffer {
                             MAG_SENSOR_ID,
                             IdentifierCode::Product,
                             "LSM3030DLHC",
-                        )),
-                    ))
-                }
-                // Temperature
-                7 => {
-                    self.increment_total_events();
-                    self.remaining_identifiers += 1;
-                    Some(Version1DataFrame::new(
-                        self.total_events,
-                        0,
-                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
-                        Identification::new(Identifier::new(
-                            TEMP_SENSOR_ID,
-                            IdentifierCode::Maker,
-                            "STMicroelectronics",
                         )),
                     ))
                 }
@@ -207,11 +211,65 @@ impl SensorOutBuffer {
                         self.total_events,
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        LinearRangeInfo::new(LinearRanges {
+                            target: MAG_SENSOR_ID,
+                            // e.g. (2*2^11)/(1100*(1.3- -1.3)) = 1.43... Gauss
+                            resolution_bits: 12, // -2048 .. 2047
+                            lsb_per_unit: 1100,  // LSB/Gauss
+                            meas_range_max: 13,  // + 1.3 Gauss
+                            meas_range_min: -13, // - 1.3 Gauss
+                            range_decimals: 1,   // range is +/- 1.3*10^-1
+                            ..Default::default()
+                        }),
+                    ))
+                }
+                // Temperature
+                9 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            TEMP_SENSOR_ID,
+                            IdentifierCode::Maker,
+                            "STMicroelectronics",
+                        )),
+                    ))
+                }
+                10 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                         Identification::new(Identifier::new(
                             TEMP_SENSOR_ID,
                             IdentifierCode::Product,
                             "LSM3030DLHC",
                         )),
+                    ))
+                }
+                11 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        LinearRangeInfo::new(LinearRanges {
+                            target: TEMP_SENSOR_ID,
+                            // (2*2^11)/(8*(80- -40)) + 20 = 26.023529411764706
+                            resolution_bits: 12,
+                            lsb_per_unit: 8, // 8 LSB/°C
+                            meas_range_max: 80,
+                            meas_range_min: -40,
+                            range_decimals: 0, // range is times 10^0
+                            offset: 20,
+                            offset_decimals: 0,
+                        }),
                     ))
                 }
                 _ => {

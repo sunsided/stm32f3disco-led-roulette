@@ -53,6 +53,8 @@ impl Compass {
         let sda = pb7.into_af_open_drain(mode, otype, alternate_function_low);
         let i2c = i2c::I2c::new(i2c1, (scl, sda), 400_000.Hz(), clocks, advanced_periph_bus);
 
+        // NOTE: When changing the sensor values here, make sure to also change the sensor identification
+        //       in SensorOutBuffer.
         let mut lsm303dhlc = Lsm303::new(i2c)?;
 
         // Enable accelerometer data ready on PE4.
