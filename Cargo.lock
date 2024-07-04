@@ -327,9 +327,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe739944a5406424e080edccb6add95685130b9f160d5407c639c7df0c5836b0"
+checksum = "152dd546e5bdac80844ce6befabb9af5784ce375cb6cea554aed99fe2d1fb169"
 dependencies = [
  "typenum",
 ]
@@ -376,7 +376,7 @@ dependencies = [
  "cast",
  "defmt",
  "embedded-hal",
- "generic-array 1.0.0",
+ "generic-array 1.0.1",
  "lsm303dlhc-registers",
 ]
 
@@ -583,8 +583,7 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 [[package]]
 name = "serial-sensors-proto"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45b4372b6753acdd7a68858d8cf153196b427d672d091f397972a979d05be81a"
+source = "git+https://github.com/sunsided/serial-sensors-proto?branch=main#bb55c0e5e1ce84ee0a452601af2fd6b1e0b2b4b8"
 dependencies = [
  "bincode",
  "corncobs",
@@ -595,8 +594,7 @@ dependencies = [
 [[package]]
 name = "serial-sensors-proto-derive"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41d97f1f94f7b0a0529cb82fcee99436e13c50c9c138233c97d6b92537562343"
+source = "git+https://github.com/sunsided/serial-sensors-proto?branch=main#bb55c0e5e1ce84ee0a452601af2fd6b1e0b2b4b8"
 dependencies = [
  "darling",
  "proc-macro2",

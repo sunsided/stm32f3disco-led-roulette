@@ -2,8 +2,19 @@
 
 use core::ops::Range;
 
-use serial_sensors_proto::types::{AccelerometerI16, MagnetometerI16, TemperatureI16};
+use serial_sensors_proto::types::{
+    AccelerometerI16, Identification, MagnetometerI16, TemperatureI16,
+};
 use serial_sensors_proto::versions::Version1DataFrame;
+use serial_sensors_proto::{Identifier, IdentifierCode, SensorId, SensorIds};
+
+const BUFFER_SIZE: usize = 192;
+const ACCEL_SENSOR_ID: SensorId = SensorIds::ACCELEROMETERI16
+    .with_sensor_tag(lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _);
+const MAG_SENSOR_ID: SensorId = SensorIds::MAGNETOMETERI16
+    .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
+const TEMP_SENSOR_ID: SensorId = SensorIds::TEMPERATUREI16
+    .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
 
 /// This type ensures that we store sensor data until we're ready to process them,
 /// and handles the serialization to the target buffer where possible.
@@ -15,8 +26,9 @@ pub struct SensorOutBuffer {
     temperature: Option<TemperatureI16>,
     temp_events: u32,
     total_events: u32,
-    transmit_buffer: [u8; 64],
+    transmit_buffer: [u8; BUFFER_SIZE],
     write_remaining: Range<usize>,
+    remaining_identifiers: u8,
 }
 
 #[allow(dead_code)]
@@ -30,8 +42,9 @@ impl SensorOutBuffer {
             temperature: None,
             temp_events: 0,
             total_events: 0,
-            transmit_buffer: [0_u8; 64],
+            transmit_buffer: [0_u8; BUFFER_SIZE],
             write_remaining: 0..0,
+            remaining_identifiers: 0,
         }
     }
 
@@ -68,6 +81,13 @@ impl SensorOutBuffer {
         self.write_remaining.clone()
     }
 
+    /// Initiate the sending of identification data.
+    pub fn send_identification_data(&mut self) {
+        if self.remaining_identifiers == 0 {
+            self.remaining_identifiers = 1;
+        }
+    }
+
     /// Updates the transmit data if possible and returns `true` if data was made
     /// available or is still available from a previous write.
     pub fn update_transmit_buffer(&mut self) -> bool {
@@ -75,7 +95,131 @@ impl SensorOutBuffer {
             return true;
         }
 
-        let frame = if let Some(accelerometer) = self.accelerometer.take() {
+        // Send identification frames first, if we can.
+        let frame = if self.remaining_identifiers > 0 {
+            match self.remaining_identifiers {
+                // Board
+                1 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        0x00, // device
+                        Identification::new(Identifier::new(
+                            SensorId::META_IDENTIFIER,
+                            IdentifierCode::Maker,
+                            "STMicroelectronics",
+                        )),
+                    ))
+                }
+                2 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        0x00, // device
+                        Identification::new(Identifier::new(
+                            SensorId::META_IDENTIFIER,
+                            IdentifierCode::Product,
+                            "STM32F3 Discovery",
+                        )),
+                    ))
+                }
+                // Accelerometer
+                3 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            ACCEL_SENSOR_ID,
+                            IdentifierCode::Maker,
+                            "STMicroelectronics",
+                        )),
+                    ))
+                }
+                4 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            ACCEL_SENSOR_ID,
+                            IdentifierCode::Product,
+                            "LSM3030DLHC",
+                        )),
+                    ))
+                }
+                // Magnetometer
+                5 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            MAG_SENSOR_ID,
+                            IdentifierCode::Maker,
+                            "STMicroelectronics",
+                        )),
+                    ))
+                }
+                6 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            MAG_SENSOR_ID,
+                            IdentifierCode::Product,
+                            "LSM3030DLHC",
+                        )),
+                    ))
+                }
+                // Temperature
+                7 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            TEMP_SENSOR_ID,
+                            IdentifierCode::Maker,
+                            "STMicroelectronics",
+                        )),
+                    ))
+                }
+                8 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            TEMP_SENSOR_ID,
+                            IdentifierCode::Product,
+                            "LSM3030DLHC",
+                        )),
+                    ))
+                }
+                _ => {
+                    self.remaining_identifiers = 0;
+                    None
+                }
+            }
+        } else if let Some(accelerometer) = self.accelerometer.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
                 self.total_events,

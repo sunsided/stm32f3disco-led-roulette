@@ -215,6 +215,9 @@ fn main() -> ! {
     // Handle sensor events with style.
     let mut sensor_buffer = SensorOutBuffer::new();
 
+    // TODO: Get a proper timer so we can send identification every 10 seconds, or so.
+    let mut identification_counter = 0;
+
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
@@ -231,6 +234,7 @@ fn main() -> ! {
         }
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
+            identification_counter += 1;
             match led_state {
                 FlipFlop::Flip => {
                     let next = (curr + 1) % 8;
@@ -243,6 +247,12 @@ fn main() -> ! {
                     led_state = FlipFlop::Flip;
                 }
             }
+        }
+
+        // TODO: really use proper timings here instead
+        if identification_counter == 64 {
+            identification_counter = 0;
+            sensor_buffer.send_identification_data();
         }
 
         // Try to fill the buffer.
