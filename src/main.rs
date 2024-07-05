@@ -35,7 +35,7 @@ mod sensor_out_buffer;
 mod utils;
 
 /// Determines how often the timer interrupt should fire.
-const WAKE_UP_EVERY_US: Micros = Micros::new(100);
+const WAKE_UP_EVERY_US: Micros = Micros::new(500);
 
 /// Determines the duration between LED updates.
 const DRIVE_LED_EVERY_MS: Millis = Millis::new(30);
