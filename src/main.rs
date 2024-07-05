@@ -7,7 +7,6 @@ use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
-use chip_select::ChipSelectGuarded;
 use cortex_m::asm;
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
@@ -25,7 +24,7 @@ use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use crate::compass::Compass;
-use crate::l3gd20::{L3GD20ChipSelect, L3GD20SPI};
+use crate::l3gd20::{Gyroscope, GyroscopeChipSelect};
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
 use crate::utils::{Micros, Millis};
@@ -124,8 +123,8 @@ fn main() -> ! {
     .expect("failed to set up compass");
 
     // Initialize the L2GD20 SPI gyroscope.
-    let gyro_cs = L3GD20ChipSelect::new(gpioe.pe3, &mut gpioe.moder, &mut gpioe.otyper);
-    let mut gyro = L3GD20SPI::new(
+    let gyro_cs = GyroscopeChipSelect::new(gpioe.pe3, &mut gpioe.moder, &mut gpioe.otyper);
+    let mut gyro = Gyroscope::new(
         gpioa.pa5,
         gpioa.pa6,
         gpioa.pa7,
@@ -256,7 +255,7 @@ fn main() -> ! {
             defmt::warn!("Gyro temperature: {}", temp + 25);
 
             // TODO: Other readings
-            if let Ok(status) = gyro.raw_data() {
+            if let Ok(status) = gyro.xyz_raw() {
                 defmt::warn!("Gyro data: {}", status);
             } else {
                 defmt::error!("Failed to read gyro data");
@@ -438,10 +437,7 @@ fn identify_compass(compass: &mut Compass) {
     };
 }
 
-fn identify_gyro<CS>(gryo: &mut L3GD20SPI<CS>)
-where
-    CS: ChipSelectGuarded,
-{
+fn identify_gyro(gryo: &mut Gyroscope) {
     match gryo.identify() {
         Ok(true) => {
             defmt::info!("L3GD20 gyro sensor identification succeeded");
