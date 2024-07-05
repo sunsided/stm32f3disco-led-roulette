@@ -7,7 +7,7 @@ use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
-use chip_select::ChipSelect;
+use chip_select::ChipSelectGuarded;
 use cortex_m::asm;
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
@@ -254,6 +254,13 @@ fn main() -> ! {
             // TODO: Put it in a useful place
             let temp = gyro.temp_raw().unwrap_or(255);
             defmt::warn!("Gyro temperature: {}", temp + 25);
+
+            // TODO: Other readings
+            if let Ok(status) = gyro.raw_data() {
+                defmt::warn!("Gyro data: {}", status);
+            } else {
+                defmt::error!("Failed to read gyro data");
+            }
         }
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
@@ -433,7 +440,7 @@ fn identify_compass(compass: &mut Compass) {
 
 fn identify_gyro<CS>(gryo: &mut L3GD20SPI<CS>)
 where
-    CS: ChipSelect,
+    CS: ChipSelectGuarded,
 {
     match gryo.identify() {
         Ok(true) => {
