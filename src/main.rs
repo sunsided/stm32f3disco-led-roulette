@@ -353,14 +353,22 @@ fn handle_magnetometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOut
             let y = y * inv_norm;
             let z = z * inv_norm;
 
+            let mut heading = y.atan2(x).to_degrees();
+            if heading < 0.0 {
+                heading += 360.0;
+            }
+
+            sensor_buffer.update_heading(ScalarData::<i16>::new(heading as _));
+
             defmt::info!(
-                "Received compass data: {}, {}, {} - ({}, {}, {})",
+                "Received compass data: {}, {}, {} - ({}, {}, {}) - {} degrees",
                 value.x,
                 value.y,
                 value.z,
                 x,
                 y,
-                z
+                z,
+                heading
             )
         }
         Err(err) => {

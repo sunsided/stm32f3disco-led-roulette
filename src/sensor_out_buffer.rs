@@ -2,11 +2,9 @@
 
 use core::ops::Range;
 
-use serial_sensors_proto::types::{
-    AccelerometerI16, Identification, LinearRangeInfo, MagnetometerI16, TemperatureI16,
-};
+use serial_sensors_proto::types::*;
 use serial_sensors_proto::versions::Version1DataFrame;
-use serial_sensors_proto::{Identifier, IdentifierCode, LinearRanges, SensorId, SensorIds};
+use serial_sensors_proto::*;
 
 const BUFFER_SIZE: usize = 192;
 const ACCEL_SENSOR_ID: SensorId = SensorIds::ACCELEROMETERI16
@@ -25,6 +23,8 @@ pub struct SensorOutBuffer {
     mag_events: u32,
     temperature: Option<TemperatureI16>,
     temp_events: u32,
+    heading: Option<HeadingI16>,
+    heading_events: u32,
     total_events: u32,
     transmit_buffer: [u8; BUFFER_SIZE],
     write_remaining: Range<usize>,
@@ -41,6 +41,8 @@ impl SensorOutBuffer {
             mag_events: 0,
             temperature: None,
             temp_events: 0,
+            heading: None,
+            heading_events: 0,
             total_events: 0,
             transmit_buffer: [0_u8; BUFFER_SIZE],
             write_remaining: 0..0,
@@ -70,6 +72,14 @@ impl SensorOutBuffer {
     {
         self.temperature = Some(reading.into());
         self.temp_events = self.temp_events.wrapping_add(1);
+    }
+
+    pub fn update_heading<I>(&mut self, reading: I)
+    where
+        I: Into<HeadingI16>,
+    {
+        self.heading = Some(reading.into());
+        self.heading_events = self.heading_events.wrapping_add(1);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -119,6 +129,14 @@ impl SensorOutBuffer {
                 self.temp_events,
                 lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                 temperature,
+            ))
+        } else if let Some(heading) = self.heading.take() {
+            self.increment_total_events();
+            Some(Version1DataFrame::new(
+                self.total_events,
+                self.heading_events,
+                0x01,
+                heading,
             ))
         } else if self.remaining_identifiers > 0 {
             match self.remaining_identifiers {
