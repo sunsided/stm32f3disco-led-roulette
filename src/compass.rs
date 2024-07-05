@@ -44,7 +44,7 @@ impl Compass {
          * Pinout:
          * PB6 -> SCL (clock)
          * PB7 -> SDA (data)
-         * PE2 -> DRDY (magnometer data ready)
+         * PE2 -> DRDY (magnetometer data ready)
          * PE4 -> INT1 (configurable interrupt 1)
          * PE5 -> INT2 (configurable interrupt 2)
          * lsm303hdlc driver uses continuous mode, so no need to wait for interrupts on DRDY
