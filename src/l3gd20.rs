@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use l3gd20_registers::gyro::*;
-use l3gd20_registers::{Register, WritableRegister};
+use chip_select::{ChipSelect, ChipSelectActiveLow};
+use l3gd20_registers::*;
 use stm32f3xx_hal::gpio::{gpioa, gpioe, Alternate, Gpioa, Gpioe, Output, Pin, PushPull, U};
 use stm32f3xx_hal::pac::SPI1;
 use stm32f3xx_hal::prelude::*;
@@ -25,76 +25,41 @@ pub struct L3GD20SPI<CS> {
     spi: SpiType,
 }
 
-/// A chip-select trait.
-pub trait ChipSelect {
-    /// Indicates whether this instance is configured to auto-select the chip on communication.
-    #[must_use]
-    fn is_auto_select(&self) -> bool;
+/// Chip select for the L3GD20.
+pub struct L3GD20ChipSelect(
+    bool,
+    ChipSelectActiveLow<Pin<Gpioe, U<3>, Output<PushPull>>>,
+);
 
-    /// Selects the chip if auto-select is enabled.
-    fn auto_select(&mut self) {
-        if self.is_auto_select() {
-            self.select()
-        }
+impl ChipSelect for L3GD20ChipSelect {
+    fn is_auto_select(&self) -> bool {
+        self.1.is_auto_select()
     }
 
-    /// Selects the chip, driving the line low.
-    fn select(&mut self);
+    fn select(&mut self) {
+        self.1.select()
+    }
 
-    /// Deselects the chip, driving the line high.
-    fn deselect(&mut self);
+    fn deselect(&mut self) {
+        self.1.deselect()
+    }
 }
-
-/// Chip select for the L3GD20.
-pub struct L3GD20ChipSelect(bool, Pin<Gpioe, U<3>, Output<PushPull>>);
 
 impl L3GD20ChipSelect {
     /// Initialize the chip select.
-    #[allow(clippy::too_many_arguments)]
     pub fn new<CsMode>(
         cs: gpioe::PE3<CsMode>,
         moder: &mut gpioe::MODER,
         otyper: &mut gpioe::OTYPER,
     ) -> Self {
         let l3gd20_cs = cs.into_push_pull_output(moder, otyper);
-        L3GD20ChipSelect(false, l3gd20_cs)
+        L3GD20ChipSelect(false, l3gd20_cs.into())
     }
 
     /// Enables auto-select on the chip.
     pub fn with_auto_select(mut self, enabled: bool) -> Self {
         self.0 = enabled;
         self
-    }
-
-    /// Selects the chip if auto-select is enabled.
-    pub fn auto_select(&mut self) {
-        if self.0 {
-            self.select()
-        }
-    }
-
-    /// Selects the chip, driving the line low.
-    pub fn select(&mut self) {
-        self.1.set_low().ok();
-    }
-
-    /// Deselects the chip, driving the line high.
-    pub fn deselect(&mut self) {
-        self.1.set_high().ok();
-    }
-}
-
-impl ChipSelect for L3GD20ChipSelect {
-    fn is_auto_select(&self) -> bool {
-        self.0
-    }
-
-    fn select(&mut self) {
-        self.select()
-    }
-
-    fn deselect(&mut self) {
-        self.deselect()
     }
 }
 
@@ -132,7 +97,7 @@ where
         clocks: rcc::Clocks,
         advanced_periph_bus: &mut rcc::APB2,
         chip_select: CS,
-    ) -> Self
+    ) -> Result<Self, Error>
     where
         CS: ChipSelect,
     {
@@ -142,10 +107,15 @@ where
 
         // Set up SPI.
         let spi = Spi::new(spi, (sck, miso, mosi), 3.MHz(), clocks, advanced_periph_bus);
-        Self {
+        let mut device = Self {
             cs: chip_select,
             spi,
-        }
+        };
+
+        // Apply standard configuration.
+        device.reset()?;
+
+        Ok(device)
     }
 
     /// Enables chip-select for this device.
@@ -171,6 +141,53 @@ where
     {
         let ident = self.read_register::<WhoAmI>()?;
         Ok(ident.ident() == 0b11010100)
+    }
+
+    /// Resets the device to reasonable defaults.
+    pub fn reset(&mut self) -> Result<(), Error> {
+        self.modify_register(|reg: ControlRegister1| {
+            reg.with_power_up(true)
+                .with_x_enable(true)
+                .with_y_enable(true)
+                .with_z_enable(true)
+                .with_output_data_rate(OutputDataRate::Hz380)
+                .with_bandwidth(Bandwidth::Medium)
+        })
+    }
+
+    /// Sets the be powered up and active.
+    pub fn power_up(&mut self) -> Result<(), Error> {
+        self.modify_register(|reg: ControlRegister1| {
+            reg.with_power_up(true)
+                .with_x_enable(true)
+                .with_y_enable(true)
+                .with_z_enable(true)
+        })
+    }
+
+    /// Sets the device to sleep mode.
+    pub fn sleep_mode(&mut self) -> Result<(), Error> {
+        self.modify_register(|reg: ControlRegister1| {
+            reg.with_power_up(true)
+                .with_x_enable(false)
+                .with_y_enable(false)
+                .with_z_enable(false)
+        })
+    }
+
+    /// Sets the device to be powered down.
+    pub fn power_down(&mut self) -> Result<(), Error> {
+        self.modify_register(|reg: ControlRegister1| reg.with_power_up(false))
+    }
+
+    /// Sets the output data rate.
+    pub fn set_odr(&mut self, data_rate: OutputDataRate) -> Result<(), Error> {
+        self.modify_register(|reg: ControlRegister1| reg.with_output_data_rate(data_rate))
+    }
+
+    /// Sets the output data rate.
+    pub fn set_bandwidth(&mut self, bandwidth: Bandwidth) -> Result<(), Error> {
+        self.modify_register(|reg: ControlRegister1| reg.with_bandwidth(bandwidth))
     }
 
     /// Creates a read command for a given address. Does not auto-increment the address afterward.

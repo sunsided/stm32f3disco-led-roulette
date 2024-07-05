@@ -7,6 +7,7 @@ use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
+use chip_select::ChipSelect;
 use cortex_m::asm;
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
@@ -24,7 +25,7 @@ use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use crate::compass::Compass;
-use crate::l3gd20::{ChipSelect, L3GD20ChipSelect, L3GD20SPI};
+use crate::l3gd20::{L3GD20ChipSelect, L3GD20SPI};
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
 use crate::utils::{Micros, Millis};
@@ -135,7 +136,8 @@ fn main() -> ! {
         clocks,
         &mut rcc.apb2,
         gyro_cs,
-    );
+    )
+    .expect("failed to set up gyro");
 
     // Configure a timer to generate interrupts.
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
