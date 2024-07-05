@@ -194,7 +194,7 @@ impl SensorOutBuffer {
                         Identification::new(Identifier::new(
                             ACCEL_SENSOR_ID,
                             IdentifierCode::Product,
-                            "LSM3030DLHC",
+                            "LSM303DLHC",
                         )),
                     ))
                 }
@@ -238,7 +238,7 @@ impl SensorOutBuffer {
                         Identification::new(Identifier::new(
                             MAG_SENSOR_ID,
                             IdentifierCode::Product,
-                            "LSM3030DLHC",
+                            "LSM303DLHC",
                         )),
                     ))
                 }
@@ -282,7 +282,7 @@ impl SensorOutBuffer {
                         Identification::new(Identifier::new(
                             TEMP_SENSOR_ID,
                             IdentifierCode::Product,
-                            "LSM3030DLHC",
+                            "LSM303DLHC",
                         )),
                     ))
                 }
