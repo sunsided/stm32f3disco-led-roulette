@@ -24,13 +24,13 @@ use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use crate::compass::Compass;
-use crate::l3gd20::{Gyroscope, GyroscopeChipSelect};
+use crate::gyro::{Gyroscope, GyroscopeChipSelect};
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
 use crate::utils::{Micros, Millis};
 
 mod compass;
-mod l3gd20;
+mod gyro;
 mod leds;
 mod sensor_out_buffer;
 mod utils;
@@ -252,6 +252,10 @@ fn main() -> ! {
 
     // Handle sensor events with style.
     let mut sensor_buffer = SensorOutBuffer::new();
+
+    // Get the gyro calibration data.
+    let characteristics = gyro.characteristics().unwrap();
+    sensor_buffer.update_gyro_characteristics(characteristics);
 
     // TODO: Use TIMER to get proper 10-second timing, or so.
     let mut identification_counter = 0;

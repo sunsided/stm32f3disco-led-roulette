@@ -2,6 +2,7 @@
 
 use core::ops::Range;
 
+use l3gd20_ng::Characteristics;
 use serial_sensors_proto::types::*;
 use serial_sensors_proto::versions::Version1DataFrame;
 use serial_sensors_proto::*;
@@ -29,6 +30,7 @@ pub struct SensorOutBuffer {
     heading_events: u32,
     gyro: Option<GyroscopeI16>,
     gyro_events: u32,
+    gyro_characteristics: Characteristics,
     total_events: u32,
     transmit_buffer: [u8; BUFFER_SIZE],
     write_remaining: Range<usize>,
@@ -49,6 +51,7 @@ impl SensorOutBuffer {
             heading_events: 0,
             gyro: None,
             gyro_events: 0,
+            gyro_characteristics: Characteristics::default(),
             total_events: 0,
             transmit_buffer: [0_u8; BUFFER_SIZE],
             write_remaining: 0..0,
@@ -86,6 +89,10 @@ impl SensorOutBuffer {
     {
         self.gyro = Some(reading.into());
         self.gyro_events = self.gyro_events.wrapping_add(1);
+    }
+
+    pub fn update_gyro_characteristics(&mut self, characteristics: Characteristics) {
+        self.gyro_characteristics = characteristics;
     }
 
     pub fn update_heading<I>(&mut self, reading: I)
@@ -351,6 +358,22 @@ impl SensorOutBuffer {
                             IdentifierCode::Product,
                             "L3GD20",
                         )),
+                    ))
+                }
+                14 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        LinearRangeInfo::new(LinearRanges {
+                            target: GYRO_SENSOR_ID,
+                            resolution_bits: 16,
+                            scale: (self.gyro_characteristics.sensitivity * 100_000.0) as i32,
+                            scale_decimals: 5,
+                            ..Default::default()
+                        }),
                     ))
                 }
                 _ => {

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use chip_select::{ChipSelect, ChipSelectActiveLow, ChipSelectGuarded, DeselectOnDrop};
-use l3gd20_ng::{I16x3, L3GD20SPI};
+use l3gd20_ng::{Characteristics, I16x3, L3GD20SPI};
 use l3gd20_registers::*;
 use stm32f3xx_hal::gpio::{gpioa, gpioe, Alternate, Gpioa, Gpioe, Output, Pin, PushPull, U};
 use stm32f3xx_hal::pac::SPI1;
@@ -116,5 +116,10 @@ impl Gyroscope {
     /// Fetches all data off the sensor.
     pub fn xyz_raw(&mut self) -> Result<I16x3, Error> {
         self.l3gd20.xyz_raw()
+    }
+
+    /// Get the sensor characteristics.
+    pub fn characteristics(&mut self) -> Result<Characteristics, Error> {
+        self.l3gd20.characteristics()
     }
 }
