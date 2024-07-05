@@ -250,6 +250,10 @@ fn main() -> ! {
         if MAGNETOMETER_READY.swap(false, Ordering::AcqRel) {
             handle_magnetometer_data(&mut compass, &mut sensor_buffer);
             handle_temperature_data(&mut compass, &mut sensor_buffer);
+
+            // TODO: Put it in a useful place
+            let temp = gyro.temp_raw().unwrap_or(255);
+            defmt::warn!("Gyro temperature: {}", temp + 25);
         }
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
@@ -344,7 +348,7 @@ fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutB
         Ok(value) => {
             sensor_buffer.update_temp(ScalarData::new(value));
 
-            let base_value = value as f32 / (8.0 * (80.0 - -40.0));
+            let base_value = value as f32 / 8.0;
             defmt::info!(
                 "Received temperature: {} = ±{}°C ({}°C)",
                 value,

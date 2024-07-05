@@ -190,6 +190,15 @@ where
         self.modify_register(|reg: ControlRegister1| reg.with_bandwidth(bandwidth))
     }
 
+    /// Identifies this chip by querying the `WHO_AM_I` register.
+    pub fn temp_raw(&mut self) -> Result<u8, Error>
+    where
+        CS: ChipSelect,
+    {
+        let ident = self.read_register::<TemperatureRegister>()?;
+        Ok(ident.temp())
+    }
+
     /// Creates a read command for a given address. Does not auto-increment the address afterward.
     fn read_single_cmd(address: u8) -> u8 {
         Self::READ | Self::SINGLE | (address & Self::REG_ADDR_MASK)
