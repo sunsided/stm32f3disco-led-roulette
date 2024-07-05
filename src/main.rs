@@ -7,6 +7,7 @@ use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
+use chip_select::ChipSelectGuarded;
 use cortex_m::asm;
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
@@ -16,20 +17,21 @@ use defmt_rtt as _;
 use panic_probe as _;
 use serial_sensors_proto::{ScalarData, Vector3Data};
 use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
-use stm32f3xx_hal::i2c::Error;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
-use stm32f3xx_hal::{interrupt, pac, prelude::*, timer};
+use stm32f3xx_hal::{i2c, interrupt, pac, prelude::*, spi, timer};
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use crate::compass::Compass;
+use crate::l3gd20::{L3GD20ChipSelect, L3GD20SPI};
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
 use crate::utils::{Micros, Millis};
 
 mod compass;
+mod l3gd20;
 mod leds;
 mod sensor_out_buffer;
 mod utils;
@@ -121,6 +123,22 @@ fn main() -> ! {
     )
     .expect("failed to set up compass");
 
+    // Initialize the L2GD20 SPI gyroscope.
+    let gyro_cs = L3GD20ChipSelect::new(gpioe.pe3, &mut gpioe.moder, &mut gpioe.otyper);
+    let mut gyro = L3GD20SPI::new(
+        gpioa.pa5,
+        gpioa.pa6,
+        gpioa.pa7,
+        &mut gpioa.moder,
+        &mut gpioa.otyper,
+        &mut gpioa.afrl,
+        dp.SPI1,
+        clocks,
+        &mut rcc.apb2,
+        gyro_cs,
+    )
+    .expect("failed to set up gyro");
+
     // Configure a timer to generate interrupts.
     let mut timer = Timer::new(dp.TIM2, clocks, &mut rcc.apb1);
     let timer_interrupt = timer.interrupt();
@@ -206,6 +224,7 @@ fn main() -> ! {
 
     // Run a bit of welcoming logic.
     identify_compass(&mut compass);
+    identify_gyro(&mut gyro);
 
     // Make the sensor really slow to simplify debugging.
     if cfg!(feature = "slowpoke") {
@@ -231,6 +250,17 @@ fn main() -> ! {
         if MAGNETOMETER_READY.swap(false, Ordering::AcqRel) {
             handle_magnetometer_data(&mut compass, &mut sensor_buffer);
             handle_temperature_data(&mut compass, &mut sensor_buffer);
+
+            // TODO: Put it in a useful place
+            let temp = gyro.temp_raw().unwrap_or(255);
+            defmt::warn!("Gyro temperature: {}", temp + 25);
+
+            // TODO: Other readings
+            if let Ok(status) = gyro.raw_data() {
+                defmt::warn!("Gyro data: {}", status);
+            } else {
+                defmt::error!("Failed to read gyro data");
+            }
         }
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
@@ -325,7 +355,7 @@ fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutB
         Ok(value) => {
             sensor_buffer.update_temp(ScalarData::new(value));
 
-            let base_value = value as f32 / (8.0 * (80.0 - -40.0));
+            let base_value = value as f32 / 8.0;
             defmt::info!(
                 "Received temperature: {} = ±{}°C ({}°C)",
                 value,
@@ -408,13 +438,39 @@ fn identify_compass(compass: &mut Compass) {
     };
 }
 
-fn log_i2c_error(err: Error) {
+fn identify_gyro<CS>(gryo: &mut L3GD20SPI<CS>)
+where
+    CS: ChipSelectGuarded,
+{
+    match gryo.identify() {
+        Ok(true) => {
+            defmt::info!("L3GD20 gyro sensor identification succeeded");
+        }
+        Ok(false) => {
+            defmt::error!("L3GD20 gyro sensor identification failed");
+        }
+        Err(err) => {
+            log_spi_error(err);
+        }
+    };
+}
+
+fn log_i2c_error(err: i2c::Error) {
     match err {
-        Error::Arbitration => defmt::error!("I2C arbitration error"),
-        Error::Bus => defmt::error!("I2C bus error"),
-        Error::Busy => defmt::warn!("I2C bus busy"),
-        Error::Nack => defmt::error!("I2C NACK"),
+        i2c::Error::Arbitration => defmt::error!("I2C arbitration error"),
+        i2c::Error::Bus => defmt::error!("I2C bus error"),
+        i2c::Error::Busy => defmt::warn!("I2C bus busy"),
+        i2c::Error::Nack => defmt::error!("I2C NACK"),
         _ => defmt::error!("Unknown I2C error"),
+    }
+}
+
+fn log_spi_error(err: spi::Error) {
+    match err {
+        spi::Error::Overrun => defmt::error!("SPI overrun"),
+        spi::Error::ModeFault => defmt::error!("SPI CRC mode fault"),
+        spi::Error::Crc => defmt::error!("SPI CRC error"),
+        _ => defmt::error!("Unknown SPI error"),
     }
 }
 

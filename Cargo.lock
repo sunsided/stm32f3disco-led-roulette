@@ -104,6 +104,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "chip-select"
+version = "0.1.0"
+source = "git+https://github.com/sunsided/chip-select#8f9bc72437bdd9bae464f99024ba43413c50219d"
+dependencies = [
+ "embedded-hal",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -327,9 +335,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "1.0.1"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "152dd546e5bdac80844ce6befabb9af5784ce375cb6cea554aed99fe2d1fb169"
+checksum = "96512db27971c2c3eece70a1e106fbe6c87760234e31e8f7e5634912fe52794a"
 dependencies = [
  "typenum",
 ]
@@ -339,6 +347,12 @@ name = "hardware-registers"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09bb5f836deb3345765ac220b788d745c7d80d91c6c8c192a6603137fd8d2c7a"
+
+[[package]]
+name = "hardware-registers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6012ad48a34e3fd7bbebc1873ebde5908dc57770eefc6418b85cae6b4ea6e06b"
 
 [[package]]
 name = "hash32"
@@ -366,6 +380,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "l3gd20-registers"
+version = "0.1.0-alpha.1"
+source = "git+https://github.com/sunsided/l3gd20-registers#19c9e62214c1942f7804350254ccd80624ff2e19"
+dependencies = [
+ "bitfield-struct",
+ "defmt",
+ "hardware-registers 0.2.0",
+]
+
+[[package]]
 name = "lsm303dlhc-ng"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -376,19 +400,19 @@ dependencies = [
  "cast",
  "defmt",
  "embedded-hal",
- "generic-array 1.0.1",
+ "generic-array 1.1.0",
  "lsm303dlhc-registers",
 ]
 
 [[package]]
 name = "lsm303dlhc-registers"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "403a33a4752a56ce7fd8444c2d4cb83ecf9d6c954122dacb851aa28dedd24f22"
+checksum = "79813826bed2350a30258b0c23eab1b594d9e1ee65f969ab70ebdd7e7fe73c2e"
 dependencies = [
  "bitfield-struct",
  "defmt",
- "hardware-registers",
+ "hardware-registers 0.1.0",
 ]
 
 [[package]]
@@ -644,12 +668,14 @@ name = "stm32f3disco-led-roulette"
 version = "0.1.0"
 dependencies = [
  "accelerometer",
+ "chip-select",
  "cortex-m",
  "cortex-m-rt",
  "cortex-m-semihosting",
  "critical-section",
  "defmt",
  "defmt-rtt",
+ "l3gd20-registers",
  "lsm303dlhc-ng",
  "lsm303dlhc-registers",
  "micromath 2.1.0",
