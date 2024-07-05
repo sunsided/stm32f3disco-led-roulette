@@ -13,6 +13,8 @@ const MAG_SENSOR_ID: SensorId = SensorIds::MAGNETOMETERI16
     .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
 const TEMP_SENSOR_ID: SensorId = SensorIds::TEMPERATUREI16
     .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
+const GYRO_SENSOR_ID: SensorId =
+    SensorIds::GYROSCOPEI16.with_sensor_tag(l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _);
 
 /// This type ensures that we store sensor data until we're ready to process them,
 /// and handles the serialization to the target buffer where possible.
@@ -25,6 +27,8 @@ pub struct SensorOutBuffer {
     temp_events: u32,
     heading: Option<HeadingI16>,
     heading_events: u32,
+    gyro: Option<GyroscopeI16>,
+    gyro_events: u32,
     total_events: u32,
     transmit_buffer: [u8; BUFFER_SIZE],
     write_remaining: Range<usize>,
@@ -43,6 +47,8 @@ impl SensorOutBuffer {
             temp_events: 0,
             heading: None,
             heading_events: 0,
+            gyro: None,
+            gyro_events: 0,
             total_events: 0,
             transmit_buffer: [0_u8; BUFFER_SIZE],
             write_remaining: 0..0,
@@ -72,6 +78,14 @@ impl SensorOutBuffer {
     {
         self.temperature = Some(reading.into());
         self.temp_events = self.temp_events.wrapping_add(1);
+    }
+
+    pub fn update_gyro<I>(&mut self, reading: I)
+    where
+        I: Into<GyroscopeI16>,
+    {
+        self.gyro = Some(reading.into());
+        self.gyro_events = self.gyro_events.wrapping_add(1);
     }
 
     pub fn update_heading<I>(&mut self, reading: I)
@@ -106,7 +120,15 @@ impl SensorOutBuffer {
         }
 
         // Send identification frames first, if we can.
-        let frame = if let Some(accelerometer) = self.accelerometer.take() {
+        let frame = if let Some(gyro) = self.gyro.take() {
+            self.increment_total_events();
+            Some(Version1DataFrame::new(
+                self.total_events,
+                self.gyro_events,
+                l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                gyro,
+            ))
+        } else if let Some(accelerometer) = self.accelerometer.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
                 self.total_events,
@@ -300,6 +322,35 @@ impl SensorOutBuffer {
                             offset: 20,
                             ..Default::default()
                         }),
+                    ))
+                }
+                // Temperature
+                12 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            GYRO_SENSOR_ID,
+                            IdentifierCode::Maker,
+                            "STMicroelectronics",
+                        )),
+                    ))
+                }
+                13 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            GYRO_SENSOR_ID,
+                            IdentifierCode::Product,
+                            "L3GD20",
+                        )),
                     ))
                 }
                 _ => {

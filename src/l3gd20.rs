@@ -85,7 +85,11 @@ impl Gyroscope {
 
         // Set up SPI.
         let spi = Spi::new(spi, (sck, miso, mosi), 3.MHz(), clocks, advanced_periph_bus);
-        let device = L3GD20SPI::new(spi, chip_select)?;
+        let mut device = L3GD20SPI::new(spi, chip_select)?;
+
+        // Requires `PE1` and `EXTI1` to be set up correctly.
+        device.enable_data_ready(true)?;
+
         Ok(Self { l3gd20: device })
     }
 
