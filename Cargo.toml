@@ -13,7 +13,7 @@ slowpoke = []
 
 [dependencies]
 accelerometer = "0.12.0"
-chip-select = { version = "0.1.0", default-features = false, features = ["hal-0_2"] }
+chip-select = { version = "0.2.0", default-features = false, features = ["hal-0_2"] }
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.3"
 cortex-m-semihosting = "0.5.0"
@@ -34,7 +34,7 @@ usb-device = { version = "0.3.2", features = ["defmt"] }
 usbd-serial = "0.2.2"
 
 [patch.crates-io]
-chip-select = { git = "https://github.com/sunsided/chip-select" }
+# chip-select = { git = "https://github.com/sunsided/chip-select" }
 l3gd20-registers = { git = "https://github.com/sunsided/l3gd20-registers" }
 # serial-sensors-proto = { git = "https://github.com/sunsided/serial-sensors-proto", branch = "main" }
 stm32f3xx-hal = { git = "https://github.com/sunsided/stm32f3xx-hal", branch = "feature/stm32-usbd-0.7.0", version = "0.10.0" }

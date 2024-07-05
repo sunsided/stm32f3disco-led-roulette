@@ -18,6 +18,7 @@ This project covers:
   and [`lsm303dlhc-registers`](https://github.com/sunsided/lsm303dlhc-registers)).
     - Observing the magnetometer's `DRDY` with an `EXTI2_TSC` interrupt.
     - Observing the accelerometer's `I1DRDY1` with an `EXTI4` interrupt.
+- Querying the L3GD20 MEMS gyroscope via SPI.
 - Operating a USB CDC serial port for communication.
     - Uses [serial-sensors-proto](https://github.com/sunsided/serial-sensors-proto) to serialize and byte-stuff
       the sensor readings and hands them over to [serial-sensors](https://github.com/sunsided/serial-sensors)
