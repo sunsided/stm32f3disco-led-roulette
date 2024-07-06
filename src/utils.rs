@@ -1,6 +1,7 @@
 use core::ops::{Deref, Div};
 
 use stm32f3xx_hal::time::duration::{Microseconds, Milliseconds};
+use stm32f3xx_hal::time::rate::Hertz;
 
 /// Wraps a time, in milliseconds.
 #[derive(Default, Debug, Copy, Clone, Eq, Ord, PartialOrd, PartialEq)]
@@ -22,6 +23,10 @@ impl Millis {
     pub const fn milliseconds(&self) -> Milliseconds<u32> {
         Milliseconds(self.0)
     }
+
+    pub const fn frequency(&self) -> Hertz {
+        Hertz(1_000 / self.0)
+    }
 }
 
 impl Micros {
@@ -35,6 +40,10 @@ impl Micros {
 
     pub const fn microseconds(&self) -> Microseconds<u32> {
         Microseconds(self.0)
+    }
+
+    pub const fn frequency(&self) -> Hertz {
+        Hertz(1_000_000 / self.0)
     }
 }
 

@@ -442,7 +442,7 @@ impl SensorOutBuffer {
                             resolution_bits: 8,
                             scale: 1,
                             scale_decimals: 0,
-                            offset: 10, // TODO: Super empirical.
+                            offset: 20, // TODO: Super empirical.
                             ..Default::default()
                         }),
                     ))

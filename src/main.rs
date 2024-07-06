@@ -4,7 +4,7 @@
 #![no_std]
 
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
@@ -17,6 +17,7 @@ use defmt_rtt as _;
 use panic_probe as _;
 use serial_sensors_proto::{ScalarData, Vector3Data};
 use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
+use stm32f3xx_hal::time::rate::Hertz;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
 use stm32f3xx_hal::{i2c, interrupt, pac, prelude::*, spi, timer};
@@ -38,14 +39,6 @@ mod leds;
 mod sensor_out_buffer;
 mod utils;
 
-/// Determines how often the timer interrupt should fire.
-const WAKE_UP_EVERY_US: Micros = Micros::new(500);
-
-/// Determines the duration between LED updates.
-const DRIVE_LED_EVERY_MS: Millis = Millis::new(30);
-
-pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
-
 /// Timer interrupt from TIM2.
 static TIMER: Mutex<RefCell<Option<Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
 
@@ -61,7 +54,7 @@ static PE2_INT: Mutex<RefCell<Option<Pin<Gpioe, U<2>, Input>>>> = Mutex::new(Ref
 static PE4_INT: Mutex<RefCell<Option<Pin<Gpioe, U<4>, Input>>>> = Mutex::new(RefCell::new(None));
 
 /// Flag to drive the LED roulette.
-static UPDATE_LED_ROULETTE: AtomicBool = AtomicBool::new(false);
+static ROTATE_LED_ROULETTE: AtomicBool = AtomicBool::new(false);
 
 /// Indicates whether gyroscope data is ready.
 /// This is indicated by an interrupt on the [`PE1_INT`] pin and flagged in the `EXTI1` handler.
@@ -74,6 +67,29 @@ static MAGNETOMETER_READY: AtomicBool = AtomicBool::new(true);
 /// Indicates whether accelerometer data is ready.
 /// This is indicated by an interrupt on the [`PE4_INT`] pin and flagged in the `EXTI4` handler.
 static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(true);
+
+/// Determines how often the timer interrupt should fire. See also [`TIM2_COUNTER`].
+const TIM2_WAKE_UP_EVERY_US: Micros = Micros::new(100);
+
+/// The wake-up frequency of timer 2.
+const TIM2_FREQUENCY: Hertz = TIM2_WAKE_UP_EVERY_US.frequency();
+
+/// The counter value of timer 2. See [`TIM2_WAKE_UP_EVERY_US`].
+static TIM2_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+/// Drive the LEDs at 100 Hz, i.e. a maximum duty cycle length of 10 ms.
+const LED_PWM_FREQUENCY: Hertz = Hertz(100);
+
+/// The 100% value for a duty cycle.
+const LED_PWM_DUTY_CYCLE_MAX: u16 = u16::MAX;
+
+/// The LED PWM duty-time counter.
+static LED_PWM_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+/// Determines the duration between LED updates.
+const ROTATE_LED_RING_EVERY_MS: Millis = Millis::new(100);
+
+pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 
 #[entry]
 fn main() -> ! {
@@ -163,7 +179,7 @@ fn main() -> ! {
     let timer_interrupt = timer.interrupt();
 
     timer.enable_interrupt(timer::Event::Update);
-    timer.start(WAKE_UP_EVERY_US.microseconds());
+    timer.start(TIM2_WAKE_UP_EVERY_US.microseconds());
 
     // Put the timer in the global context.
     critical_section::with(|cs| {
@@ -250,9 +266,6 @@ fn main() -> ! {
         // .self_powered(false)
         .build();
 
-    let mut curr = 0;
-    let mut led_state = FlipFlop::Flip;
-
     // Run a bit of welcoming logic.
     identify_compass(&mut compass);
     identify_gyro(&mut gyro);
@@ -269,6 +282,23 @@ fn main() -> ! {
     let characteristics = gyro.characteristics().unwrap();
     sensor_buffer.update_gyro_characteristics(characteristics);
 
+    // Prepare a table for LED duty cycles.
+    let mut gamma_table: [u16; 100] = [0; 100];
+    leds::populate_gamma_table(&mut gamma_table, LED_PWM_DUTY_CYCLE_MAX);
+    defmt::debug!("{}", gamma_table);
+
+    // The PWM duty cycles for each LED
+    let mut led_duty_cycles: [u16; 8] = [
+        gamma_table[12],
+        gamma_table[25],
+        gamma_table[37],
+        gamma_table[50],
+        gamma_table[62],
+        gamma_table[75],
+        gamma_table[87],
+        gamma_table[99],
+    ];
+
     let mut previous = Byot::now();
     let mut last_ident_send = Byot::now();
     loop {
@@ -280,6 +310,20 @@ fn main() -> ! {
         } else {
             false
         };
+
+        let led_duty_cycle_count = LED_PWM_COUNTER.load(Ordering::Acquire);
+        for i in 0..led_duty_cycles.len() {
+            let on_time = led_duty_cycles[i];
+            if led_duty_cycle_count <= u32::from(on_time) {
+                leds[i].on().ok();
+            } else {
+                leds[i].off().ok();
+            }
+        }
+
+        if ROTATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
+            led_duty_cycles.rotate_right(1);
+        }
 
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
@@ -323,22 +367,7 @@ fn main() -> ! {
             handle_gyroscope_data(&mut gyro, &mut sensor_buffer);
         }
 
-        if UPDATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
-            match led_state {
-                FlipFlop::Flip => {
-                    let next = (curr + 1) % 8;
-                    leds[next].on().ok();
-                    led_state = FlipFlop::Flop(curr);
-                    curr = next;
-                }
-                FlipFlop::Flop(curr) => {
-                    leds[curr].off().ok();
-                    led_state = FlipFlop::Flip;
-                }
-            }
-        }
-
-        // Onlyl send sensor identifications every once in a while.
+        // Only send sensor identifications every once in a while.
         if now.whole_seconds_since(&last_ident_send) >= 10 {
             last_ident_send = now;
             sensor_buffer.send_identification_data();
@@ -418,7 +447,7 @@ fn handle_gyro_temperature_data(gyro: &mut Gyroscope, sensor_buffer: &mut Sensor
                 "Received gyro temperature: {} = ±{}°C ({}°C)",
                 value,
                 value,
-                value as i16 + 25
+                value as i16 + 20
             )
         }
         Err(err) => {
@@ -546,14 +575,6 @@ fn log_spi_error(err: spi::Error) {
     }
 }
 
-/// LED flip-flop state machine.
-enum FlipFlop {
-    /// Turns on the next LED.
-    Flip,
-    /// Turns off the specified LED (index).
-    Flop(usize),
-}
-
 /// Hardfault handler.
 ///
 /// Terminates the application and makes a semihosting-capable debug tool exit
@@ -573,25 +594,36 @@ pub fn wait_for_interrupt() {
 
 #[interrupt]
 fn TIM2() {
+    // A bit of silly counter logic. Legacy.
     static mut COUNT: u32 = 0;
-    const LED_UPDATE_COUNT: u32 = DRIVE_LED_EVERY_MS.div(WAKE_UP_EVERY_US);
+    const LED_ROTATE_UPDATE_COUNT: u32 = ROTATE_LED_RING_EVERY_MS.div(TIM2_WAKE_UP_EVERY_US);
+
+    // Increment the counter based on our selected frequency.
+    // Trivially: At a timer frequency of 2 kHz, this will reach 2000 in one second.
+    // The value is delayed by one count, but that shouldn't matter.
+    let _count = TIM2_COUNTER.fetch_add(1, Ordering::Release);
+
+    // At 2 kHz, the counter reaches 2000 in 1 second, with one tick every 0.5 ms (500 ns).
+    //
+    // If we want to drive our LEDs at 100 Hz, we need to reach 0..MAX in 10 ms.
+    // For that, we need to drive the LED PWM counter by 1 tick every 20 tick of the TIM2
+    // counter (since 10 ms / 0.5 ms = 20, or 2000 Hz / 100 Hz = 20).
+    const TICKS: u32 = TIM2_FREQUENCY.0 / LED_PWM_FREQUENCY.0;
+    let value = LED_PWM_COUNTER.fetch_add(LED_PWM_DUTY_CYCLE_MAX as u32 / TICKS, Ordering::Release);
+    if value + 1 >= LED_PWM_DUTY_CYCLE_MAX as u32 {
+        LED_PWM_COUNTER.fetch_sub(LED_PWM_DUTY_CYCLE_MAX as u32, Ordering::Release);
+    }
+
+    // Rotate the LED ring.
+    *COUNT += 1;
+    if *COUNT == LED_ROTATE_UPDATE_COUNT {
+        ROTATE_LED_ROULETTE.store(true, Ordering::Release);
+        *COUNT = 0;
+    }
 
     // Just handle the pending interrupt event.
     critical_section::with(|cs| {
-        if let Some(ref mut timer) = TIMER
-            // Unlock resource for use in critical section
-            .borrow(cs)
-            // Get a mutable reference from the RefCell
-            .borrow_mut()
-            // Make the inner Option<T> -> Option<&mut T>
-            .as_mut()
-        {
-            *COUNT += 1;
-            if *COUNT == LED_UPDATE_COUNT {
-                UPDATE_LED_ROULETTE.store(true, Ordering::Release);
-                *COUNT = 0;
-            }
-
+        if let Some(ref mut timer) = TIMER.borrow_ref_mut(cs).as_mut() {
             // Finally operate on the timer itself.
             timer.clear_event(timer::Event::Update);
         }
