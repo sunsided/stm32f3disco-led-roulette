@@ -15,11 +15,11 @@ const ACCEL_SENSOR_ID: SensorId = SensorIds::ACCELEROMETERI16
 const MAG_SENSOR_ID: SensorId = SensorIds::MAGNETOMETERI16
     .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
 const MAG_TEMP_SENSOR_ID: SensorId = SensorIds::TEMPERATUREI16
-    .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
+    .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as u16 + 100);
 const GYRO_SENSOR_ID: SensorId =
     SensorIds::GYROSCOPEI16.with_sensor_tag(l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _);
-const GYRO_TEMP_SENSOR_ID: SensorId =
-    SensorIds::TEMPERATUREI16.with_sensor_tag(l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _);
+const GYRO_TEMP_SENSOR_ID: SensorId = SensorIds::TEMPERATUREI16
+    .with_sensor_tag(l3gd20_registers::DEFAULT_DEVICE_ADDRESS as u16 + 100);
 
 /// This type ensures that we store sensor data until we're ready to process them,
 /// and handles the serialization to the target buffer where possible.
@@ -156,7 +156,7 @@ impl SensorOutBuffer {
                 u16::MAX,
                 self.total_events,
                 self.gyro_events,
-                l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                GYRO_SENSOR_ID.tag(),
                 gyro,
             ))
         } else if let Some(accelerometer) = self.accelerometer.take() {
@@ -167,7 +167,7 @@ impl SensorOutBuffer {
                 u16::MAX,
                 self.total_events,
                 self.accel_events,
-                lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                ACCEL_SENSOR_ID.tag(),
                 accelerometer,
             ))
         } else if let Some(magnetometer) = self.magnetometer.take() {
@@ -178,7 +178,7 @@ impl SensorOutBuffer {
                 u16::MAX,
                 self.total_events,
                 self.mag_events,
-                lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                MAG_SENSOR_ID.tag(),
                 magnetometer,
             ))
         } else if let Some(temperature) = self.mag_temperature.take() {
@@ -189,7 +189,7 @@ impl SensorOutBuffer {
                 u16::MAX,
                 self.total_events,
                 self.mag_temp_events,
-                lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                MAG_TEMP_SENSOR_ID.tag(),
                 temperature,
             ))
         } else if let Some(temperature) = self.gyro_temperature.take() {
@@ -200,7 +200,7 @@ impl SensorOutBuffer {
                 u16::MAX,
                 self.total_events,
                 self.gyro_temp_events,
-                l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                GYRO_TEMP_SENSOR_ID.tag(),
                 temperature,
             ))
         } else if let Some(heading) = self.heading.take() {
@@ -261,7 +261,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                        ACCEL_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             ACCEL_SENSOR_ID,
                             IdentifierCode::Maker,
@@ -278,7 +278,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                        ACCEL_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             ACCEL_SENSOR_ID,
                             IdentifierCode::Product,
@@ -295,7 +295,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
+                        ACCEL_SENSOR_ID.tag(),
                         LinearRangeInfo::new(LinearRanges {
                             target: ACCEL_SENSOR_ID,
                             resolution_bits: 12,
@@ -314,7 +314,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        MAG_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             MAG_SENSOR_ID,
                             IdentifierCode::Maker,
@@ -331,7 +331,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        MAG_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             MAG_SENSOR_ID,
                             IdentifierCode::Product,
@@ -348,7 +348,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        MAG_SENSOR_ID.tag(),
                         LinearRangeInfo::new(LinearRanges {
                             target: MAG_SENSOR_ID,
                             resolution_bits: 12,
@@ -367,7 +367,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        MAG_TEMP_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             MAG_TEMP_SENSOR_ID,
                             IdentifierCode::Maker,
@@ -384,7 +384,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        MAG_TEMP_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             MAG_TEMP_SENSOR_ID,
                             IdentifierCode::Product,
@@ -401,7 +401,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                        MAG_TEMP_SENSOR_ID.tag(),
                         LinearRangeInfo::new(LinearRanges {
                             target: MAG_TEMP_SENSOR_ID,
                             resolution_bits: 12,
@@ -421,7 +421,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        GYRO_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             GYRO_SENSOR_ID,
                             IdentifierCode::Maker,
@@ -438,7 +438,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        GYRO_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             GYRO_SENSOR_ID,
                             IdentifierCode::Product,
@@ -455,7 +455,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        GYRO_SENSOR_ID.tag(),
                         LinearRangeInfo::new(LinearRanges {
                             target: GYRO_SENSOR_ID,
                             resolution_bits: 16,
@@ -476,7 +476,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        GYRO_TEMP_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             GYRO_TEMP_SENSOR_ID,
                             IdentifierCode::Maker,
@@ -493,7 +493,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        GYRO_TEMP_SENSOR_ID.tag(),
                         Identification::new(Identifier::new(
                             GYRO_TEMP_SENSOR_ID,
                             IdentifierCode::Product,
@@ -510,7 +510,7 @@ impl SensorOutBuffer {
                         u16::MAX,
                         self.total_events,
                         0,
-                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        GYRO_TEMP_SENSOR_ID.tag(),
                         LinearRangeInfo::new(LinearRanges {
                             target: GYRO_TEMP_SENSOR_ID,
                             resolution_bits: 8,
