@@ -370,8 +370,9 @@ impl SensorOutBuffer {
                         LinearRangeInfo::new(LinearRanges {
                             target: GYRO_SENSOR_ID,
                             resolution_bits: 16,
-                            scale: (self.gyro_characteristics.sensitivity * 100_000.0) as i32,
-                            scale_decimals: 5,
+                            scale: (self.gyro_characteristics.sensitivity.recip() * 100_000.0)
+                                as i32,
+                            scale_decimals: 6,
                             ..Default::default()
                         }),
                     ))

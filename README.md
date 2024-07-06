@@ -57,9 +57,9 @@ The magnetometer on the other hand - pun not intended - appears to use a right-h
 - Z points up
     - When pointing the top side towards the vector, the sensor reads a positive maximum on the Z axis.
 
-| Accelerometer                    | Magnetometer                    |
-|----------------------------------|---------------------------------|
-| ![](docs/tikz/accelerometer.png) | ![](docs/tikz/magnetometer.png) ||
+| Accelerometer                                            | Magnetometer                                           | Gyroscope                          |
+|----------------------------------------------------------|--------------------------------------------------------|------------------------------------|
+| ![LSM303DLHC Accelerometer](docs/tikz/accelerometer.png) | ![LSM303DLHC Magnetometer](docs/tikz/magnetometer.png) | ![L3GD20](docs/tikz/gyroscope.png) |
 
 ## Flashing & Running
 

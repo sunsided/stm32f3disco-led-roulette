@@ -383,7 +383,7 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 [[package]]
 name = "l3gd20-ng"
 version = "0.1.0-alpha.1"
-source = "git+https://github.com/sunsided/l3gd20#3ece62d3e11d0dec78894c66936ba2d6bd77ead1"
+source = "git+https://github.com/sunsided/l3gd20#ac9db4c7e686c9c3f2145b78ed28a55f425dfc40"
 dependencies = [
  "chip-select",
  "defmt",

@@ -264,6 +264,25 @@ fn main() -> ! {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
 
+        // Handle reading of data first.
+        if usb_has_events {
+            let mut buf = [0u8; 64];
+            match serial.read(&mut buf[..]) {
+                Ok(_count) => {
+                    // count bytes were read to &buf[..count]
+                    defmt::trace!("Received USB data");
+                }
+                Err(UsbError::WouldBlock) => {
+                    // No data received
+                    defmt::trace!("Received no USB data");
+                }
+                Err(err) => {
+                    // An error occurred
+                    defmt::error!("Failed to receive USB data: {}", err);
+                }
+            };
+        }
+
         // Check for a magnetometer event.
         if ACCELEROMETER_READY.swap(false, Ordering::Acquire) {
             handle_accelerometer_data(&mut compass, &mut sensor_buffer);
@@ -314,25 +333,6 @@ fn main() -> ! {
         if !usb_has_events && !has_sensor_data {
             wait_for_interrupt();
             continue;
-        }
-
-        // Handle reading of data first.
-        if usb_has_events {
-            let mut buf = [0u8; 64];
-            match serial.read(&mut buf[..]) {
-                Ok(_count) => {
-                    // count bytes were read to &buf[..count]
-                    defmt::trace!("Received USB data");
-                }
-                Err(UsbError::WouldBlock) => {
-                    // No data received
-                    defmt::trace!("Received no USB data");
-                }
-                Err(err) => {
-                    // An error occurred
-                    defmt::error!("Failed to receive USB data: {}", err);
-                }
-            };
         }
 
         // Short-circuit and leave the bus alone.
