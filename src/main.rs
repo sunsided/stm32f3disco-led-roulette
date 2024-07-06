@@ -4,7 +4,7 @@
 #![no_std]
 
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
@@ -17,7 +17,6 @@ use defmt_rtt as _;
 use panic_probe as _;
 use serial_sensors_proto::{ScalarData, Vector3Data};
 use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
-use stm32f3xx_hal::time::rate::Hertz;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
 use stm32f3xx_hal::{i2c, interrupt, pac, prelude::*, spi, timer};
@@ -76,23 +75,14 @@ static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(true);
 /// Determines how often the timer interrupt should fire. See also [`TIM2_COUNTER`].
 const TIM2_WAKE_UP_EVERY_US: Micros = Micros::new(500);
 
-/// The wake-up frequency of timer 2.
-const TIM2_FREQUENCY: Hertz = TIM2_WAKE_UP_EVERY_US.frequency();
-
 /// The counter value of timer 2. See [`TIM2_WAKE_UP_EVERY_US`].
 static TIM2_COUNTER: AtomicU32 = AtomicU32::new(0);
 
-/// Drive the LEDs at 100 Hz.
-const LED_PWM_FREQUENCY: Hertz = Hertz(100);
-
 /// The 100% value for a duty cycle.
-const LED_PWM_DUTY_CYCLE_MAX: u16 = u16::MAX;
-
-/// The number of timer ticks per LED driving period..
-const TIM2_TICKS_PER_LED_PWM_PERIOD: u32 = TIM2_FREQUENCY.0 / LED_PWM_FREQUENCY.0;
+const LED_PWM_DUTY_CYCLE_MAX: u32 = (u16::MAX as u32) * 1000;
 
 /// The LED PWM duty-time counter.
-static LED_PWM_COUNTER: AtomicU16 = AtomicU16::new(0);
+static LED_PWM_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 #[entry]
 fn main() -> ! {
@@ -285,8 +275,22 @@ fn main() -> ! {
     let characteristics = gyro.characteristics().unwrap();
     sensor_buffer.update_gyro_characteristics(characteristics);
 
+    let mut gamma_table: [u32; 100] = [0; 100];
+    leds::populate_gamma_table(&mut gamma_table, LED_PWM_DUTY_CYCLE_MAX);
+
+    defmt::warn!("{}", gamma_table);
+
     // The PWM duty cycles for each LED
-    let led_duty_cycles: [u16; 8] = [u16::MAX, u16::MAX / 2, 0, 0, 0, u16::MAX / 4, 0, 4096];
+    let mut led_duty_cycles: [u32; 8] = [
+        gamma_table[12],
+        gamma_table[25],
+        gamma_table[37],
+        gamma_table[50],
+        gamma_table[62],
+        gamma_table[75],
+        gamma_table[87],
+        gamma_table[99],
+    ];
 
     let mut previous = Byot::now();
     let mut last_ident_send = Byot::now();
@@ -300,12 +304,15 @@ fn main() -> ! {
             false
         };
 
-        let led_duty_cycle_count = u32::from(LED_PWM_COUNTER.load(Ordering::Acquire));
+        let percentage = (gamma_table.len() as u32 * u32::from(Byot::subsec_millis()) / 1000)
+            .min(gamma_table.len() as u32 - 1);
+        let table_entry = gamma_table[percentage as usize];
+        led_duty_cycles[7] = table_entry;
 
+        let led_duty_cycle_count = LED_PWM_COUNTER.load(Ordering::Acquire);
         for i in 0..led_duty_cycles.len() {
-            let on_time = u32::from(led_duty_cycles[i]) * TIM2_TICKS_PER_LED_PWM_PERIOD
-                / u32::from(LED_PWM_DUTY_CYCLE_MAX);
-            if led_duty_cycle_count < on_time {
+            let on_time = led_duty_cycles[i];
+            if led_duty_cycle_count <= on_time {
                 leds[i].on().ok();
             } else {
                 leds[i].off().ok();
@@ -588,12 +595,16 @@ fn TIM2() {
     // Increment the counter based on our selected frequency.
     // Trivially: At a timer frequency of 2 kHz, this will reach 2000 in one second.
     // The value is delayed by one count, but that shouldn't matter.
-    TIM2_COUNTER.fetch_add(1, Ordering::Release);
+    let _count = TIM2_COUNTER.fetch_add(1, Ordering::Release);
 
-    // Wrap the counter to each second, e.g. 0..2000 at 2 kHz.
-    let value = LED_PWM_COUNTER.fetch_add(1, Ordering::Release);
-    if u32::from(value) >= TIM2_TICKS_PER_LED_PWM_PERIOD {
-        LED_PWM_COUNTER.store(0, Ordering::Release);
+    // At 2 kHz, the counter reaches 2000 in 1 second, with one tick every 0.5 ms (500 ns).
+    //
+    // If we want to drive our LEDs at 100 Hz, we need to reach 0..MAX in 10 ms.
+    // For that, we need to drive the LED PWM counter by 1 tick every 20 tick of the TIM2
+    // counter (since 10 ms / 0.5 ms = 20, or 2000 Hz / 100 Hz = 20).
+    let value = LED_PWM_COUNTER.fetch_add(LED_PWM_DUTY_CYCLE_MAX / 20, Ordering::Release);
+    if value + 1 >= LED_PWM_DUTY_CYCLE_MAX {
+        LED_PWM_COUNTER.fetch_sub(LED_PWM_DUTY_CYCLE_MAX, Ordering::Release);
     }
 
     // Just handle the pending interrupt event.

@@ -315,3 +315,18 @@ impl<'a> ExactSizeIterator for LedsMutIterator<'a> {
 
 ///Marker trait that indicates LedsMutIterator never starts returning Some after returning None
 impl<'a> FusedIterator for LedsMutIterator<'a> {}
+
+pub fn populate_gamma_table<const TABLE_SIZE: usize>(
+    table: &mut [u32; TABLE_SIZE],
+    duty_cycle_max: u32,
+) {
+    use micromath::F32Ext;
+    let duty_cycle_max = duty_cycle_max as f32;
+    let table_size_inv = (TABLE_SIZE as f32).recip();
+    const GAMMA: f32 = 1.8;
+    for (i, entry) in table.iter_mut().enumerate() {
+        let normalized = i as f32 * table_size_inv;
+        let corrected = normalized.powf(GAMMA) * duty_cycle_max;
+        *entry = corrected as u32;
+    }
+}
