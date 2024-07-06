@@ -105,8 +105,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chip-select"
-version = "0.1.0"
-source = "git+https://github.com/sunsided/chip-select#8f9bc72437bdd9bae464f99024ba43413c50219d"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea83d6c80a45d097f575b144c2b67be41daef754120145055518322484b262ca"
 dependencies = [
  "embedded-hal",
 ]
@@ -380,9 +381,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
-name = "l3gd20-registers"
+name = "l3gd20-ng"
 version = "0.1.0-alpha.1"
-source = "git+https://github.com/sunsided/l3gd20-registers#19c9e62214c1942f7804350254ccd80624ff2e19"
+source = "git+https://github.com/sunsided/l3gd20#ac9db4c7e686c9c3f2145b78ed28a55f425dfc40"
+dependencies = [
+ "chip-select",
+ "defmt",
+ "embedded-hal",
+ "l3gd20-registers",
+]
+
+[[package]]
+name = "l3gd20-registers"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "648143fcf3e261e8eace39ffd2a6dbff9749429ddedb86bf21a9afb1d58067cd"
 dependencies = [
  "bitfield-struct",
  "defmt",
@@ -675,6 +688,7 @@ dependencies = [
  "critical-section",
  "defmt",
  "defmt-rtt",
+ "l3gd20-ng",
  "l3gd20-registers",
  "lsm303dlhc-ng",
  "lsm303dlhc-registers",

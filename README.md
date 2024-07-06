@@ -18,6 +18,7 @@ This project covers:
   and [`lsm303dlhc-registers`](https://github.com/sunsided/lsm303dlhc-registers)).
     - Observing the magnetometer's `DRDY` with an `EXTI2_TSC` interrupt.
     - Observing the accelerometer's `I1DRDY1` with an `EXTI4` interrupt.
+- Querying the L3GD20 MEMS gyroscope via SPI ([`l3gd20-registers`](https://github.com/sunsided/l3gd20-registers)).
 - Operating a USB CDC serial port for communication.
     - Uses [serial-sensors-proto](https://github.com/sunsided/serial-sensors-proto) to serialize and byte-stuff
       the sensor readings and hands them over to [serial-sensors](https://github.com/sunsided/serial-sensors)
@@ -56,9 +57,9 @@ The magnetometer on the other hand - pun not intended - appears to use a right-h
 - Z points up
     - When pointing the top side towards the vector, the sensor reads a positive maximum on the Z axis.
 
-| Accelerometer                    | Magnetometer                    |
-|----------------------------------|---------------------------------|
-| ![](docs/tikz/accelerometer.png) | ![](docs/tikz/magnetometer.png) ||
+| Accelerometer                                            | Magnetometer                                           | Gyroscope                          |
+|----------------------------------------------------------|--------------------------------------------------------|------------------------------------|
+| ![LSM303DLHC Accelerometer](docs/tikz/accelerometer.png) | ![LSM303DLHC Magnetometer](docs/tikz/magnetometer.png) | ![L3GD20](docs/tikz/gyroscope.png) |
 
 ## Flashing & Running
 

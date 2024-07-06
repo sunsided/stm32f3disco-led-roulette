@@ -7,7 +7,6 @@ use core::cell::RefCell;
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
-use chip_select::ChipSelectGuarded;
 use cortex_m::asm;
 use cortex_m::peripheral::NVIC;
 use cortex_m_rt::entry;
@@ -25,13 +24,13 @@ use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use crate::compass::Compass;
-use crate::l3gd20::{L3GD20ChipSelect, L3GD20SPI};
+use crate::gyro::{Gyroscope, GyroscopeChipSelect};
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
 use crate::utils::{Micros, Millis};
 
 mod compass;
-mod l3gd20;
+mod gyro;
 mod leds;
 mod sensor_out_buffer;
 mod utils;
@@ -47,6 +46,10 @@ pub type LedArray = [Switch<gpioe::PEx<Output<PushPull>>, ActiveHigh>; 8];
 /// Timer interrupt from TIM2.
 static TIMER: Mutex<RefCell<Option<Timer<pac::TIM2>>>> = Mutex::new(RefCell::new(None));
 
+/// L3GD20 gyroscope data ready (DRDY) signal.
+/// PE1 pin, used to clear the interrupt in the `EXTI1` handler.
+static PE1_INT: Mutex<RefCell<Option<Pin<Gpioe, U<1>, Input>>>> = Mutex::new(RefCell::new(None));
+
 /// LSM303DLHC magnetometer data ready (DRDY) signal.
 /// PE2 pin, used to clear the interrupt in the `EXTI2` (`EXTI2_TSC`) handler.
 static PE2_INT: Mutex<RefCell<Option<Pin<Gpioe, U<2>, Input>>>> = Mutex::new(RefCell::new(None));
@@ -56,6 +59,10 @@ static PE4_INT: Mutex<RefCell<Option<Pin<Gpioe, U<4>, Input>>>> = Mutex::new(Ref
 
 /// Flag to drive the LED roulette.
 static UPDATE_LED_ROULETTE: AtomicBool = AtomicBool::new(false);
+
+/// Indicates whether gyroscope data is ready.
+/// This is indicated by an interrupt on the [`PE1_INT`] pin and flagged in the `EXTI1` handler.
+static GYRO_READY: AtomicBool = AtomicBool::new(true);
 
 /// Indicates whether magnetometer data is ready.
 /// This is indicated by an interrupt on the [`PE2_INT`] pin and flagged in the `EXTI2_TSC` handler.
@@ -124,8 +131,8 @@ fn main() -> ! {
     .expect("failed to set up compass");
 
     // Initialize the L2GD20 SPI gyroscope.
-    let gyro_cs = L3GD20ChipSelect::new(gpioe.pe3, &mut gpioe.moder, &mut gpioe.otyper);
-    let mut gyro = L3GD20SPI::new(
+    let gyro_cs = GyroscopeChipSelect::new(gpioe.pe3, &mut gpioe.moder, &mut gpioe.otyper);
+    let mut gyro = Gyroscope::new(
         gpioa.pa5,
         gpioa.pa6,
         gpioa.pa7,
@@ -154,6 +161,18 @@ fn main() -> ! {
     unsafe {
         NVIC::unmask(timer_interrupt);
     }
+
+    // Configure PE1 as interrupt source for the L3GD20's DRDY line.
+    let mut pe1 = gpioe
+        .pe1
+        .into_pull_up_input(&mut gpioe.moder, &mut gpioe.pupdr);
+    syscfg.select_exti_interrupt_source(&pe1);
+    pe1.trigger_on_edge(&mut dp.EXTI, Edge::Rising);
+    pe1.enable_interrupt(&mut dp.EXTI);
+    let gyro_drdy_interrupt = pe1.interrupt();
+
+    critical_section::with(|cs| *PE1_INT.borrow(cs).borrow_mut() = Some(pe1));
+    unsafe { NVIC::unmask(gyro_drdy_interrupt) };
 
     // Configure PE2 as interrupt source for the LSM303DLHC's DRDY line.
     let mut pe2 = gpioe
@@ -234,36 +253,56 @@ fn main() -> ! {
     // Handle sensor events with style.
     let mut sensor_buffer = SensorOutBuffer::new();
 
-    // TODO: Get a proper timer so we can send identification every 10 seconds, or so.
+    // Get the gyro calibration data.
+    let characteristics = gyro.characteristics().unwrap();
+    sensor_buffer.update_gyro_characteristics(characteristics);
+
+    // TODO: Use TIMER to get proper 10-second timing, or so.
     let mut identification_counter = 0;
 
     loop {
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
 
+        // Handle reading of data first.
+        if usb_has_events {
+            let mut buf = [0u8; 64];
+            match serial.read(&mut buf[..]) {
+                Ok(_count) => {
+                    // count bytes were read to &buf[..count]
+                    defmt::trace!("Received USB data");
+                }
+                Err(UsbError::WouldBlock) => {
+                    // No data received
+                    defmt::trace!("Received no USB data");
+                }
+                Err(err) => {
+                    // An error occurred
+                    defmt::error!("Failed to receive USB data: {}", err);
+                }
+            };
+        }
+
         // Check for a magnetometer event.
-        if ACCELEROMETER_READY.swap(false, Ordering::AcqRel) {
+        if ACCELEROMETER_READY.swap(false, Ordering::Acquire) {
             handle_accelerometer_data(&mut compass, &mut sensor_buffer);
         }
 
         // Check for a magnetometer event.
-        if MAGNETOMETER_READY.swap(false, Ordering::AcqRel) {
+        if MAGNETOMETER_READY.swap(false, Ordering::Acquire) {
             handle_magnetometer_data(&mut compass, &mut sensor_buffer);
             handle_temperature_data(&mut compass, &mut sensor_buffer);
-
-            // TODO: Put it in a useful place
-            let temp = gyro.temp_raw().unwrap_or(255);
-            defmt::warn!("Gyro temperature: {}", temp + 25);
-
-            // TODO: Other readings
-            if let Ok(status) = gyro.raw_data() {
-                defmt::warn!("Gyro data: {}", status);
-            } else {
-                defmt::error!("Failed to read gyro data");
-            }
         }
 
-        if UPDATE_LED_ROULETTE.swap(false, Ordering::AcqRel) {
+        if GYRO_READY.swap(false, Ordering::Acquire) {
+            // TODO: Run at 1Hz frequency
+            // let temp = gyro.temp_raw().unwrap_or(255);
+            // defmt::warn!("Gyro temperature: {}", temp + 25);
+
+            handle_gyroscope_data(&mut gyro, &mut sensor_buffer);
+        }
+
+        if UPDATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
             identification_counter += 1;
             match led_state {
                 FlipFlop::Flip => {
@@ -294,25 +333,6 @@ fn main() -> ! {
         if !usb_has_events && !has_sensor_data {
             wait_for_interrupt();
             continue;
-        }
-
-        // Handle reading of data first.
-        if usb_has_events {
-            let mut buf = [0u8; 64];
-            match serial.read(&mut buf[..]) {
-                Ok(_count) => {
-                    // count bytes were read to &buf[..count]
-                    defmt::trace!("Received USB data");
-                }
-                Err(UsbError::WouldBlock) => {
-                    // No data received
-                    defmt::trace!("Received no USB data");
-                }
-                Err(err) => {
-                    // An error occurred
-                    defmt::error!("Failed to receive USB data: {}", err);
-                }
-            };
         }
 
         // Short-circuit and leave the bus alone.
@@ -390,7 +410,7 @@ fn handle_magnetometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOut
 
             sensor_buffer.update_heading(ScalarData::<i16>::new(heading as _));
 
-            defmt::info!(
+            defmt::debug!(
                 "Received compass data: {}, {}, {} - ({}, {}, {}) - {} degrees",
                 value.x,
                 value.y,
@@ -411,7 +431,7 @@ fn handle_accelerometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOu
     match compass.accel_raw() {
         Ok(value) => {
             sensor_buffer.update_accel(Vector3Data::new(value.x, value.y, value.z));
-            defmt::info!(
+            defmt::debug!(
                 "Received accelerometer data: {}, {}, {}",
                 value.x,
                 value.y,
@@ -420,6 +440,23 @@ fn handle_accelerometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOu
         }
         Err(_) => {
             defmt::error!("Failed to read accelerometer data")
+        }
+    }
+}
+
+fn handle_gyroscope_data(gyro: &mut Gyroscope, sensor_buffer: &mut SensorOutBuffer) {
+    match gyro.xyz_raw() {
+        Ok(value) => {
+            sensor_buffer.update_gyro(Vector3Data::new(value.x, value.y, value.z));
+            defmt::debug!(
+                "Received gyroscope data: {}, {}, {}",
+                value.x,
+                value.y,
+                value.z
+            )
+        }
+        Err(_) => {
+            defmt::error!("Failed to read gyroscope data")
         }
     }
 }
@@ -438,10 +475,7 @@ fn identify_compass(compass: &mut Compass) {
     };
 }
 
-fn identify_gyro<CS>(gryo: &mut L3GD20SPI<CS>)
-where
-    CS: ChipSelectGuarded,
-{
+fn identify_gyro(gryo: &mut Gyroscope) {
     match gryo.identify() {
         Ok(true) => {
             defmt::info!("L3GD20 gyro sensor identification succeeded");
@@ -524,6 +558,21 @@ fn TIM2() {
             timer.clear_event(timer::Event::Update);
         }
     })
+}
+
+/// Interrupt for PE1: DRDY of the L3GD20
+///
+/// The external interrupt number maps to the MCU pin number.
+#[interrupt]
+fn EXTI1() {
+    critical_section::with(|cs| {
+        if let Some(ref mut pin) = PE1_INT.borrow(cs).borrow_mut().as_mut() {
+            GYRO_READY.store(true, Ordering::Release);
+            pin.clear_interrupt();
+        } else {
+            defmt::error!("PE1_INT not set up");
+        }
+    });
 }
 
 /// Interrupt for PE2: DRDY of the LSM303DLHC
