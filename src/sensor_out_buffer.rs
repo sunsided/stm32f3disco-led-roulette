@@ -12,10 +12,12 @@ const ACCEL_SENSOR_ID: SensorId = SensorIds::ACCELEROMETERI16
     .with_sensor_tag(lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _);
 const MAG_SENSOR_ID: SensorId = SensorIds::MAGNETOMETERI16
     .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
-const TEMP_SENSOR_ID: SensorId = SensorIds::TEMPERATUREI16
+const MAG_TEMP_SENSOR_ID: SensorId = SensorIds::TEMPERATUREI16
     .with_sensor_tag(lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _);
 const GYRO_SENSOR_ID: SensorId =
     SensorIds::GYROSCOPEI16.with_sensor_tag(l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _);
+const GYRO_TEMP_SENSOR_ID: SensorId =
+    SensorIds::TEMPERATUREI16.with_sensor_tag(l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _);
 
 /// This type ensures that we store sensor data until we're ready to process them,
 /// and handles the serialization to the target buffer where possible.
@@ -24,13 +26,15 @@ pub struct SensorOutBuffer {
     accel_events: u32,
     magnetometer: Option<MagnetometerI16>,
     mag_events: u32,
-    temperature: Option<TemperatureI16>,
-    temp_events: u32,
+    mag_temperature: Option<TemperatureI16>,
+    mag_temp_events: u32,
     heading: Option<HeadingI16>,
     heading_events: u32,
     gyro: Option<GyroscopeI16>,
     gyro_events: u32,
     gyro_characteristics: Characteristics,
+    gyro_temperature: Option<TemperatureI16>,
+    gyro_temp_events: u32,
     total_events: u32,
     transmit_buffer: [u8; BUFFER_SIZE],
     write_remaining: Range<usize>,
@@ -45,13 +49,15 @@ impl SensorOutBuffer {
             accel_events: 0,
             magnetometer: None,
             mag_events: 0,
-            temperature: None,
-            temp_events: 0,
+            mag_temperature: None,
+            mag_temp_events: 0,
             heading: None,
             heading_events: 0,
             gyro: None,
             gyro_events: 0,
             gyro_characteristics: Characteristics::default(),
+            gyro_temperature: None,
+            gyro_temp_events: 0,
             total_events: 0,
             transmit_buffer: [0_u8; BUFFER_SIZE],
             write_remaining: 0..0,
@@ -75,12 +81,12 @@ impl SensorOutBuffer {
         self.mag_events = self.mag_events.wrapping_add(1);
     }
 
-    pub fn update_temp<I>(&mut self, reading: I)
+    pub fn update_mag_temp<I>(&mut self, reading: I)
     where
         I: Into<TemperatureI16>,
     {
-        self.temperature = Some(reading.into());
-        self.temp_events = self.temp_events.wrapping_add(1);
+        self.mag_temperature = Some(reading.into());
+        self.mag_temp_events = self.mag_temp_events.wrapping_add(1);
     }
 
     pub fn update_gyro<I>(&mut self, reading: I)
@@ -95,6 +101,14 @@ impl SensorOutBuffer {
         self.gyro_characteristics = characteristics;
     }
 
+    pub fn update_gyro_temp<I>(&mut self, reading: I)
+    where
+        I: Into<TemperatureI16>,
+    {
+        self.gyro_temperature = Some(reading.into());
+        self.gyro_temp_events = self.gyro_temp_events.wrapping_add(1);
+    }
+
     pub fn update_heading<I>(&mut self, reading: I)
     where
         I: Into<HeadingI16>,
@@ -104,7 +118,9 @@ impl SensorOutBuffer {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.accelerometer.is_none() && self.magnetometer.is_none() && self.temperature.is_none()
+        self.accelerometer.is_none()
+            && self.magnetometer.is_none()
+            && self.mag_temperature.is_none()
     }
 
     /// Returns the current unprocessed buffer range for debugging.
@@ -151,12 +167,20 @@ impl SensorOutBuffer {
                 lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                 magnetometer,
             ))
-        } else if let Some(temperature) = self.temperature.take() {
+        } else if let Some(temperature) = self.mag_temperature.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
                 self.total_events,
-                self.temp_events,
+                self.mag_temp_events,
                 lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
+                temperature,
+            ))
+        } else if let Some(temperature) = self.gyro_temperature.take() {
+            self.increment_total_events();
+            Some(Version1DataFrame::new(
+                self.total_events,
+                self.gyro_temp_events,
+                l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
                 temperature,
             ))
         } else if let Some(heading) = self.heading.take() {
@@ -295,7 +319,7 @@ impl SensorOutBuffer {
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                         Identification::new(Identifier::new(
-                            TEMP_SENSOR_ID,
+                            MAG_TEMP_SENSOR_ID,
                             IdentifierCode::Maker,
                             "STMicroelectronics",
                         )),
@@ -309,7 +333,7 @@ impl SensorOutBuffer {
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                         Identification::new(Identifier::new(
-                            TEMP_SENSOR_ID,
+                            MAG_TEMP_SENSOR_ID,
                             IdentifierCode::Product,
                             "LSM303DLHC",
                         )),
@@ -323,7 +347,7 @@ impl SensorOutBuffer {
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
                         LinearRangeInfo::new(LinearRanges {
-                            target: TEMP_SENSOR_ID,
+                            target: MAG_TEMP_SENSOR_ID,
                             resolution_bits: 12,
                             scale: 8,
                             offset: 20,
@@ -331,7 +355,7 @@ impl SensorOutBuffer {
                         }),
                     ))
                 }
-                // Temperature
+                // Gyroscope
                 12 => {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
@@ -377,6 +401,52 @@ impl SensorOutBuffer {
                         }),
                     ))
                 }
+                // Gyroscope Temperature
+                15 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            GYRO_TEMP_SENSOR_ID,
+                            IdentifierCode::Maker,
+                            "STMicroelectronics",
+                        )),
+                    ))
+                }
+                16 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        Identification::new(Identifier::new(
+                            GYRO_TEMP_SENSOR_ID,
+                            IdentifierCode::Product,
+                            "L3GD20",
+                        )),
+                    ))
+                }
+                17 => {
+                    self.increment_total_events();
+                    self.remaining_identifiers += 1;
+                    Some(Version1DataFrame::new(
+                        self.total_events,
+                        0,
+                        l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
+                        LinearRangeInfo::new(LinearRanges {
+                            target: GYRO_TEMP_SENSOR_ID,
+                            resolution_bits: 8,
+                            scale: 1,
+                            scale_decimals: 0,
+                            offset: 10, // TODO: Super empirical.
+                            ..Default::default()
+                        }),
+                    ))
+                }
                 _ => {
                     self.remaining_identifiers = 0;
                     None
@@ -388,18 +458,16 @@ impl SensorOutBuffer {
 
         match frame {
             None => false,
-            Some(frame) => {
-                match serial_sensors_proto::serialize(frame, &mut self.transmit_buffer) {
-                    Ok(range) => {
-                        self.write_remaining = range.clone();
-                        true
-                    }
-                    Err(_err) => {
-                        defmt::error!("A serialization error occurred");
-                        false
-                    }
+            Some(frame) => match serialize(frame, &mut self.transmit_buffer) {
+                Ok(range) => {
+                    self.write_remaining = range.clone();
+                    true
                 }
-            }
+                Err(_err) => {
+                    defmt::error!("A serialization error occurred");
+                    false
+                }
+            },
         }
     }
 
@@ -415,7 +483,7 @@ impl SensorOutBuffer {
     /// returns the number of bytes remaining.
     pub fn commit_read(&mut self, bytes_read: usize) -> usize {
         self.write_remaining = (self.write_remaining.start + bytes_read)..self.write_remaining.end;
-        defmt::info!(
+        defmt::trace!(
             "Committing read of {} bytes, range now {}",
             bytes_read,
             self.write_remaining

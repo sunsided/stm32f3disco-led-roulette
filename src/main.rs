@@ -85,7 +85,7 @@ fn main() -> ! {
     );
 
     let mut dp = pac::Peripherals::take().unwrap();
-    let mut cp = cortex_m::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
@@ -113,9 +113,6 @@ fn main() -> ! {
     syst.clear_current();
     syst.enable_counter();
     syst.enable_interrupt();
-
-    // A monotonically non-decreasing timer.
-    let _timer = timer::MonoTimer::new(cp.DWT, clocks, &mut cp.DCB);
 
     // Prepare the LEDs.
     let leds = Leds::new(
@@ -272,18 +269,17 @@ fn main() -> ! {
     let characteristics = gyro.characteristics().unwrap();
     sensor_buffer.update_gyro_characteristics(characteristics);
 
-    // TODO: Use TIMER to get proper 10-second timing, or so.
-    let mut identification_counter = 0;
-
-    let mut previous_second = 0;
+    let mut previous = Byot::now();
+    let mut last_ident_send = Byot::now();
     loop {
         // Check clock handling.
-        let current_second = Byot::seconds();
-        let current_millis = Byot::subsec_millis();
-        if current_second > previous_second {
-            previous_second = current_second;
-            defmt::info!("The time is now: {}.{}", current_second, current_millis);
-        }
+        let now = Byot::now();
+        let a_second_has_passed = if now.whole_seconds_since(&previous) >= 1 {
+            previous = now;
+            true
+        } else {
+            false
+        };
 
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
@@ -315,19 +311,19 @@ fn main() -> ! {
         // Check for a magnetometer event.
         if MAGNETOMETER_READY.swap(false, Ordering::Acquire) {
             handle_magnetometer_data(&mut compass, &mut sensor_buffer);
-            handle_temperature_data(&mut compass, &mut sensor_buffer);
+        }
+
+        // Check temperatures.
+        if a_second_has_passed {
+            handle_mag_temperature_data(&mut compass, &mut sensor_buffer);
+            handle_gyro_temperature_data(&mut gyro, &mut sensor_buffer);
         }
 
         if GYRO_READY.swap(false, Ordering::Acquire) {
-            // TODO: Run at 1Hz frequency
-            // let temp = gyro.temp_raw().unwrap_or(255);
-            // defmt::warn!("Gyro temperature: {}", temp + 25);
-
             handle_gyroscope_data(&mut gyro, &mut sensor_buffer);
         }
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
-            identification_counter += 1;
             match led_state {
                 FlipFlop::Flip => {
                     let next = (curr + 1) % 8;
@@ -342,9 +338,9 @@ fn main() -> ! {
             }
         }
 
-        // TODO: really use proper timings here instead
-        if identification_counter == 64 {
-            identification_counter = 0;
+        // Onlyl send sensor identifications every once in a while.
+        if now.whole_seconds_since(&last_ident_send) >= 10 {
+            last_ident_send = now;
             sensor_buffer.send_identification_data();
         }
 
@@ -394,14 +390,14 @@ fn main() -> ! {
     }
 }
 
-fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
+fn handle_mag_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
     match compass.temp_raw() {
         Ok(value) => {
-            sensor_buffer.update_temp(ScalarData::new(value));
+            sensor_buffer.update_mag_temp(ScalarData::new(value));
 
             let base_value = value as f32 / 8.0;
             defmt::info!(
-                "Received temperature: {} = ±{}°C ({}°C)",
+                "Received magnetometer temperature: {} = ±{}°C ({}°C)",
                 value,
                 base_value,
                 base_value + 25.0
@@ -409,6 +405,24 @@ fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutB
         }
         Err(err) => {
             log_i2c_error(err);
+        }
+    }
+}
+
+fn handle_gyro_temperature_data(gyro: &mut Gyroscope, sensor_buffer: &mut SensorOutBuffer) {
+    match gyro.temp_raw() {
+        Ok(value) => {
+            sensor_buffer.update_gyro_temp(ScalarData::new(value as _));
+
+            defmt::info!(
+                "Received gyro temperature: {} = ±{}°C ({}°C)",
+                value,
+                value,
+                value as i16 + 25
+            )
+        }
+        Err(err) => {
+            log_spi_error(err);
         }
     }
 }
