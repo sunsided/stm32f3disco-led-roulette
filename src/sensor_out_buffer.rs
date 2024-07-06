@@ -7,6 +7,8 @@ use serial_sensors_proto::types::*;
 use serial_sensors_proto::versions::Version1DataFrame;
 use serial_sensors_proto::*;
 
+use crate::byot::Byot;
+
 const BUFFER_SIZE: usize = 192;
 const ACCEL_SENSOR_ID: SensorId = SensorIds::ACCELEROMETERI16
     .with_sensor_tag(lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _);
@@ -142,10 +144,16 @@ impl SensorOutBuffer {
             return true;
         }
 
+        let seconds = Byot::seconds();
+        let millis = Byot::subsec_millis();
+
         // Send identification frames first, if we can.
         let frame = if let Some(gyro) = self.gyro.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
+                seconds,
+                millis,
+                u16::MAX,
                 self.total_events,
                 self.gyro_events,
                 l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
@@ -154,6 +162,9 @@ impl SensorOutBuffer {
         } else if let Some(accelerometer) = self.accelerometer.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
+                seconds,
+                millis,
+                u16::MAX,
                 self.total_events,
                 self.accel_events,
                 lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
@@ -162,6 +173,9 @@ impl SensorOutBuffer {
         } else if let Some(magnetometer) = self.magnetometer.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
+                seconds,
+                millis,
+                u16::MAX,
                 self.total_events,
                 self.mag_events,
                 lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -170,6 +184,9 @@ impl SensorOutBuffer {
         } else if let Some(temperature) = self.mag_temperature.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
+                seconds,
+                millis,
+                u16::MAX,
                 self.total_events,
                 self.mag_temp_events,
                 lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -178,6 +195,9 @@ impl SensorOutBuffer {
         } else if let Some(temperature) = self.gyro_temperature.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
+                seconds,
+                millis,
+                u16::MAX,
                 self.total_events,
                 self.gyro_temp_events,
                 l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
@@ -186,6 +206,9 @@ impl SensorOutBuffer {
         } else if let Some(heading) = self.heading.take() {
             self.increment_total_events();
             Some(Version1DataFrame::new(
+                seconds,
+                millis,
+                u16::MAX,
                 self.total_events,
                 self.heading_events,
                 0x01,
@@ -198,6 +221,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         0x00, // device
@@ -212,6 +238,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         0x00, // device
@@ -227,6 +256,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
@@ -241,6 +273,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
@@ -255,6 +290,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::accel::DEFAULT_DEVICE_ADDRESS as _,
@@ -271,6 +309,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -285,6 +326,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -299,6 +343,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -315,6 +362,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -329,6 +379,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -343,6 +396,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         lsm303dlhc_registers::mag::DEFAULT_DEVICE_ADDRESS as _,
@@ -360,6 +416,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
@@ -374,6 +433,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
@@ -388,6 +450,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
@@ -406,6 +471,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
@@ -420,6 +488,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
@@ -434,6 +505,9 @@ impl SensorOutBuffer {
                     self.increment_total_events();
                     self.remaining_identifiers += 1;
                     Some(Version1DataFrame::new(
+                        seconds,
+                        millis,
+                        u16::MAX,
                         self.total_events,
                         0,
                         l3gd20_registers::DEFAULT_DEVICE_ADDRESS as _,
