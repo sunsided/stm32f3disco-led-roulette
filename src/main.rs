@@ -288,16 +288,19 @@ fn main() -> ! {
     defmt::debug!("{}", gamma_table);
 
     // The PWM duty cycles for each LED
-    let mut led_duty_cycles: [u16; 8] = [
-        gamma_table[12],
-        gamma_table[25],
-        gamma_table[37],
-        gamma_table[50],
-        gamma_table[62],
-        gamma_table[75],
-        gamma_table[87],
-        gamma_table[99],
+    let mut ref_led_duty_cycles: [u16; 8] = [
+        gamma_table[12 / 3],
+        gamma_table[25 / 3],
+        gamma_table[37 / 3],
+        gamma_table[50 / 3],
+        gamma_table[62 / 3],
+        gamma_table[75 / 3],
+        gamma_table[87 / 3],
+        gamma_table[99 / 3],
     ];
+
+    // Most recent accelerometer data.
+    let mut accelerometer: Option<Vector3Data<i16>> = None;
 
     let mut previous = Byot::now();
     let mut last_ident_send = Byot::now();
@@ -311,6 +314,70 @@ fn main() -> ! {
             false
         };
 
+        if ROTATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
+            ref_led_duty_cycles.rotate_right(1);
+        }
+
+        // Create copy of the duty cycles for processing.
+        let mut led_duty_cycles = ref_led_duty_cycles;
+
+        const NORTH: usize = 0;
+        const NORTH_EAST: usize = 1;
+        const EAST: usize = 2;
+        const SOUTH_EAST: usize = 3;
+        const SOUTH: usize = 4;
+        const SOUTH_WEST: usize = 5;
+        const WEST: usize = 6;
+        const NORTH_WEST: usize = 7;
+
+        // When accelerometer measurements are available, indicate them on the LED ring.
+        if let Some(data) = accelerometer {
+            const REF: i16 = 8192;
+
+            if data.x >= REF {
+                // Positive X is towards USB ports.
+                if data.y >= REF {
+                    led_duty_cycles[NORTH] = 0;
+                    led_duty_cycles[WEST] = 0;
+                    led_duty_cycles[NORTH_WEST] = LED_PWM_DUTY_CYCLE_MAX;
+                } else if data.y <= -REF {
+                    led_duty_cycles[NORTH] = 0;
+                    led_duty_cycles[NORTH_EAST] = LED_PWM_DUTY_CYCLE_MAX;
+                    led_duty_cycles[EAST] = 0;
+                } else {
+                    led_duty_cycles[NORTH] = LED_PWM_DUTY_CYCLE_MAX;
+                    led_duty_cycles[NORTH_EAST] = 0;
+                    led_duty_cycles[NORTH_WEST] = 0;
+                }
+            } else if data.x <= -REF {
+                // Positive X is towards LED ring ports.
+                if data.y >= REF {
+                    led_duty_cycles[SOUTH] = 0;
+                    led_duty_cycles[WEST] = 0;
+                    led_duty_cycles[SOUTH_WEST] = LED_PWM_DUTY_CYCLE_MAX;
+                } else if data.y <= -REF {
+                    led_duty_cycles[SOUTH] = 0;
+                    led_duty_cycles[SOUTH_EAST] = LED_PWM_DUTY_CYCLE_MAX;
+                    led_duty_cycles[EAST] = 0;
+                } else {
+                    led_duty_cycles[SOUTH] = LED_PWM_DUTY_CYCLE_MAX;
+                    led_duty_cycles[SOUTH_EAST] = 0;
+                    led_duty_cycles[SOUTH_WEST] = 0;
+                }
+            } else if data.y >= REF {
+                // Positive Y is towards USR button.
+                led_duty_cycles[WEST] = LED_PWM_DUTY_CYCLE_MAX;
+                led_duty_cycles[SOUTH_WEST] = 0;
+                led_duty_cycles[NORTH_WEST] = 0;
+            } else if data.y <= -REF {
+                // Positive Y is towards RESET button.
+                led_duty_cycles[EAST] = LED_PWM_DUTY_CYCLE_MAX;
+                led_duty_cycles[NORTH_EAST] = 0;
+                led_duty_cycles[SOUTH_EAST] = 0;
+            }
+        }
+
+        // Drive LEDs.
         let led_duty_cycle_count = LED_PWM_COUNTER.load(Ordering::Acquire);
         for i in 0..led_duty_cycles.len() {
             let on_time = led_duty_cycles[i];
@@ -319,10 +386,6 @@ fn main() -> ! {
             } else {
                 leds[i].off().ok();
             }
-        }
-
-        if ROTATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
-            led_duty_cycles.rotate_right(1);
         }
 
         // Must be called at least every 10 ms, i.e. at 100 Hz.
@@ -349,7 +412,7 @@ fn main() -> ! {
 
         // Check for a magnetometer event.
         if ACCELEROMETER_READY.swap(false, Ordering::Acquire) {
-            handle_accelerometer_data(&mut compass, &mut sensor_buffer);
+            accelerometer = handle_accelerometer_data(&mut compass, &mut sensor_buffer);
         }
 
         // Check for a magnetometer event.
@@ -494,19 +557,25 @@ fn handle_magnetometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOut
     }
 }
 
-fn handle_accelerometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
+fn handle_accelerometer_data(
+    compass: &mut Compass,
+    sensor_buffer: &mut SensorOutBuffer,
+) -> Option<Vector3Data<i16>> {
     match compass.accel_raw() {
         Ok(value) => {
-            sensor_buffer.update_accel(Vector3Data::new(value.x, value.y, value.z));
+            let data = Vector3Data::new(value.x, value.y, value.z);
+            sensor_buffer.update_accel(data);
             defmt::debug!(
                 "Received accelerometer data: {}, {}, {}",
                 value.x,
                 value.y,
                 value.z
-            )
+            );
+            Some(data)
         }
         Err(_) => {
-            defmt::error!("Failed to read accelerometer data")
+            defmt::error!("Failed to read accelerometer data");
+            None
         }
     }
 }
