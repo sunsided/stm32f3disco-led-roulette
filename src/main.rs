@@ -8,8 +8,9 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
+use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m::peripheral::NVIC;
-use cortex_m_rt::entry;
+use cortex_m_rt::{entry, exception};
 use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
@@ -23,12 +24,14 @@ use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
+use crate::byot::Byot;
 use crate::compass::Compass;
 use crate::gyro::{Gyroscope, GyroscopeChipSelect};
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
 use crate::utils::{Micros, Millis};
 
+mod byot;
 mod compass;
 mod gyro;
 mod leds;
@@ -82,7 +85,7 @@ fn main() -> ! {
     );
 
     let mut dp = pac::Peripherals::take().unwrap();
-    let _cp = cortex_m::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
@@ -101,6 +104,15 @@ fn main() -> ! {
         .pclk2(24.MHz())
         .freeze(&mut flash.acr);
     assert!(clocks.usbclk_valid());
+
+    // Configure SysTick
+    let mut syst = cp.SYST;
+    let ticks_per_ms = clocks.sysclk().0 / 1_000; // SysTick ticks per millisecond
+    syst.set_clock_source(SystClkSource::Core);
+    syst.set_reload(ticks_per_ms - 1); // 1 ms interval
+    syst.clear_current();
+    syst.enable_counter();
+    syst.enable_interrupt();
 
     // Prepare the LEDs.
     let leds = Leds::new(
@@ -257,10 +269,18 @@ fn main() -> ! {
     let characteristics = gyro.characteristics().unwrap();
     sensor_buffer.update_gyro_characteristics(characteristics);
 
-    // TODO: Use TIMER to get proper 10-second timing, or so.
-    let mut identification_counter = 0;
-
+    let mut previous = Byot::now();
+    let mut last_ident_send = Byot::now();
     loop {
+        // Check clock handling.
+        let now = Byot::now();
+        let a_second_has_passed = if now.whole_seconds_since(&previous) >= 1 {
+            previous = now;
+            true
+        } else {
+            false
+        };
+
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
 
@@ -291,19 +311,19 @@ fn main() -> ! {
         // Check for a magnetometer event.
         if MAGNETOMETER_READY.swap(false, Ordering::Acquire) {
             handle_magnetometer_data(&mut compass, &mut sensor_buffer);
-            handle_temperature_data(&mut compass, &mut sensor_buffer);
+        }
+
+        // Check temperatures.
+        if a_second_has_passed {
+            handle_mag_temperature_data(&mut compass, &mut sensor_buffer);
+            handle_gyro_temperature_data(&mut gyro, &mut sensor_buffer);
         }
 
         if GYRO_READY.swap(false, Ordering::Acquire) {
-            // TODO: Run at 1Hz frequency
-            // let temp = gyro.temp_raw().unwrap_or(255);
-            // defmt::warn!("Gyro temperature: {}", temp + 25);
-
             handle_gyroscope_data(&mut gyro, &mut sensor_buffer);
         }
 
         if UPDATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
-            identification_counter += 1;
             match led_state {
                 FlipFlop::Flip => {
                     let next = (curr + 1) % 8;
@@ -318,9 +338,9 @@ fn main() -> ! {
             }
         }
 
-        // TODO: really use proper timings here instead
-        if identification_counter == 64 {
-            identification_counter = 0;
+        // Onlyl send sensor identifications every once in a while.
+        if now.whole_seconds_since(&last_ident_send) >= 10 {
+            last_ident_send = now;
             sensor_buffer.send_identification_data();
         }
 
@@ -370,14 +390,14 @@ fn main() -> ! {
     }
 }
 
-fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
+fn handle_mag_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
     match compass.temp_raw() {
         Ok(value) => {
-            sensor_buffer.update_temp(ScalarData::new(value));
+            sensor_buffer.update_mag_temp(ScalarData::new(value));
 
             let base_value = value as f32 / 8.0;
             defmt::info!(
-                "Received temperature: {} = ±{}°C ({}°C)",
+                "Received magnetometer temperature: {} = ±{}°C ({}°C)",
                 value,
                 base_value,
                 base_value + 25.0
@@ -385,6 +405,24 @@ fn handle_temperature_data(compass: &mut Compass, sensor_buffer: &mut SensorOutB
         }
         Err(err) => {
             log_i2c_error(err);
+        }
+    }
+}
+
+fn handle_gyro_temperature_data(gyro: &mut Gyroscope, sensor_buffer: &mut SensorOutBuffer) {
+    match gyro.temp_raw() {
+        Ok(value) => {
+            sensor_buffer.update_gyro_temp(ScalarData::new(value as _));
+
+            defmt::info!(
+                "Received gyro temperature: {} = ±{}°C ({}°C)",
+                value,
+                value,
+                value as i16 + 25
+            )
+        }
+        Err(err) => {
+            log_spi_error(err);
         }
     }
 }
@@ -603,4 +641,10 @@ fn EXTI4() {
             defmt::error!("PE4_INT not set up");
         }
     });
+}
+
+// Define the SysTick interrupt handler
+#[exception]
+fn SysTick() {
+    Byot::systick();
 }
