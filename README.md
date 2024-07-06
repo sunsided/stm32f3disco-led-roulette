@@ -26,6 +26,13 @@ This project covers:
       the sensor readings and hands them over to [serial-sensors](https://github.com/sunsided/serial-sensors)
       for further shenanigans.
 
+Led ring shenanigans:
+
+- The accelerometer is used to have the downwards facing LED light up.
+- The magnetometer is used to determine a heading. If the device is pointed away from north,
+  the light wheel will turn in the appropriate direction. If the device faces north,
+  the lights will flash.
+
 ## Bin features
 
 The sensors are set up to provide data at up to 400 Hz, which can make debugging complicated.

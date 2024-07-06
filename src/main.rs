@@ -289,8 +289,8 @@ fn main() -> ! {
 
     // The PWM duty cycles for each LED
     let mut ref_led_duty_cycles: [u16; 8] = [
-        gamma_table[12 / 3],
-        gamma_table[25 / 3],
+        gamma_table[0],
+        gamma_table[25 / 4],
         gamma_table[37 / 3],
         gamma_table[50 / 3],
         gamma_table[62 / 3],
@@ -299,8 +299,9 @@ fn main() -> ! {
         gamma_table[99 / 3],
     ];
 
-    // Most recent accelerometer data.
+    // Most recent accelerometer and heading data.
     let mut accelerometer: Option<Vector3Data<i16>> = None;
+    let mut heading: Option<i16> = None;
 
     let mut previous = Byot::now();
     let mut last_ident_send = Byot::now();
@@ -309,17 +310,43 @@ fn main() -> ! {
         let now = Byot::now();
         let a_second_has_passed = if now.whole_seconds_since(&previous) >= 1 {
             previous = now;
+            if let Some(heading) = heading {
+                defmt::info!("Compass heading: {} degree", heading);
+            }
             true
         } else {
             false
         };
 
-        if ROTATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
-            ref_led_duty_cycles.rotate_right(1);
-        }
+        // Rotate the ring according the heading.
+        let phase = if let Some(heading) = heading {
+            if (180_i16..=315).contains(&heading) {
+                if ROTATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
+                    ref_led_duty_cycles.rotate_right(1);
+                }
+                false
+            } else if (45_i16..=180).contains(&heading) {
+                if ROTATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
+                    ref_led_duty_cycles.rotate_left(1);
+                }
+                false
+            } else {
+                true
+            }
+        } else {
+            true
+        };
 
         // Create copy of the duty cycles for processing.
         let mut led_duty_cycles = ref_led_duty_cycles;
+
+        // Phase the ring on and off
+        if phase {
+            for entry in led_duty_cycles.iter_mut() {
+                *entry =
+                    gamma_table[(gamma_table.len() - 1) * Byot::subsec_millis() as usize / 1000];
+            }
+        }
 
         const NORTH: usize = 0;
         const NORTH_EAST: usize = 1;
@@ -417,7 +444,7 @@ fn main() -> ! {
 
         // Check for a magnetometer event.
         if MAGNETOMETER_READY.swap(false, Ordering::Acquire) {
-            handle_magnetometer_data(&mut compass, &mut sensor_buffer);
+            heading = handle_magnetometer_data(&mut compass, &mut sensor_buffer);
         }
 
         // Check temperatures.
@@ -519,7 +546,10 @@ fn handle_gyro_temperature_data(gyro: &mut Gyroscope, sensor_buffer: &mut Sensor
     }
 }
 
-fn handle_magnetometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOutBuffer) {
+fn handle_magnetometer_data(
+    compass: &mut Compass,
+    sensor_buffer: &mut SensorOutBuffer,
+) -> Option<i16> {
     match compass.mag_raw() {
         Ok(value) => {
             sensor_buffer.update_mag(Vector3Data::new(value.x, value.y, value.z));
@@ -549,10 +579,13 @@ fn handle_magnetometer_data(compass: &mut Compass, sensor_buffer: &mut SensorOut
                 y,
                 z,
                 heading
-            )
+            );
+
+            Some(heading as _)
         }
         Err(err) => {
             log_i2c_error(err);
+            None
         }
     }
 }
