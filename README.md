@@ -19,6 +19,8 @@ This project covers:
     - Observing the magnetometer's `DRDY` with an `EXTI2_TSC` interrupt.
     - Observing the accelerometer's `I1DRDY1` with an `EXTI4` interrupt.
 - Querying the L3GD20 MEMS gyroscope via SPI ([`l3gd20-registers`](https://github.com/sunsided/l3gd20-registers)).
+    - Observing the gyro's `DRDY` with an `EXTI1` interrupt.
+- Temperature readings of the sensors are queried at 1Hz as measured by a 1ms `SysTick` interrupt.
 - Operating a USB CDC serial port for communication.
     - Uses [serial-sensors-proto](https://github.com/sunsided/serial-sensors-proto) to serialize and byte-stuff
       the sensor readings and hands them over to [serial-sensors](https://github.com/sunsided/serial-sensors)
