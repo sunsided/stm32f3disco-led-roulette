@@ -3,13 +3,12 @@
 // Original source: https://github.com/rubberduck203/stm32f3-discovery/blob/45c7f1b4375d6c4b7ab4f70d5699323d6feb98cc/src/leds.rs
 // SPDX-License-Identifier: MIT or Apache-2.0
 
-use stm32f3xx_hal::gpio::gpioe;
-use stm32f3xx_hal::gpio::{Output, PushPull};
-
-use switch_hal::{ActiveHigh, IntoSwitch, OutputSwitch, Switch};
-
 use core::iter::FusedIterator;
 use core::slice::Iter;
+
+use stm32f3xx_hal::gpio::gpioe;
+use stm32f3xx_hal::gpio::{Output, PushPull};
+use switch_hal::{ActiveHigh, IntoSwitch, OutputSwitch, Switch};
 
 /// LED compass direction as noted on the board
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -186,7 +185,7 @@ impl Leds {
     ///
     /// This function is maintained solely for some level of compatibility with the old F3 crate.
     ///
-    /// [`Self::iter_mut()`] should be prefered.
+    /// [`Self::iter_mut()`] should be preferred.
     /// Testing suggests that using [`Self::iter_mut()`] results in an ~800 byte
     /// reduction in final binary size.
     pub fn into_array(self) -> [Led; 8] {

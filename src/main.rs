@@ -4,7 +4,7 @@
 #![no_std]
 
 use core::cell::RefCell;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU16, AtomicU32, Ordering};
 
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
@@ -17,6 +17,7 @@ use defmt_rtt as _;
 use panic_probe as _;
 use serial_sensors_proto::{ScalarData, Vector3Data};
 use stm32f3xx_hal::gpio::{gpioe, Edge, Gpioe, Input, Output, Pin, PushPull, U};
+use stm32f3xx_hal::time::rate::Hertz;
 use stm32f3xx_hal::timer::Timer;
 use stm32f3xx_hal::usb::{Peripheral, UsbBus};
 use stm32f3xx_hal::{i2c, interrupt, pac, prelude::*, spi, timer};
@@ -37,9 +38,6 @@ mod gyro;
 mod leds;
 mod sensor_out_buffer;
 mod utils;
-
-/// Determines how often the timer interrupt should fire.
-const WAKE_UP_EVERY_US: Micros = Micros::new(500);
 
 /// Determines the duration between LED updates.
 const DRIVE_LED_EVERY_MS: Millis = Millis::new(30);
@@ -74,6 +72,27 @@ static MAGNETOMETER_READY: AtomicBool = AtomicBool::new(true);
 /// Indicates whether accelerometer data is ready.
 /// This is indicated by an interrupt on the [`PE4_INT`] pin and flagged in the `EXTI4` handler.
 static ACCELEROMETER_READY: AtomicBool = AtomicBool::new(true);
+
+/// Determines how often the timer interrupt should fire. See also [`TIM2_COUNTER`].
+const TIM2_WAKE_UP_EVERY_US: Micros = Micros::new(500);
+
+/// The wake-up frequency of timer 2.
+const TIM2_FREQUENCY: Hertz = TIM2_WAKE_UP_EVERY_US.frequency();
+
+/// The counter value of timer 2. See [`TIM2_WAKE_UP_EVERY_US`].
+static TIM2_COUNTER: AtomicU32 = AtomicU32::new(0);
+
+/// Drive the LEDs at 100 Hz.
+const LED_PWM_FREQUENCY: Hertz = Hertz(100);
+
+/// The 100% value for a duty cycle.
+const LED_PWM_DUTY_CYCLE_MAX: u16 = u16::MAX;
+
+/// The number of timer ticks per LED driving period..
+const TIM2_TICKS_PER_LED_PWM_PERIOD: u32 = TIM2_FREQUENCY.0 / LED_PWM_FREQUENCY.0;
+
+/// The LED PWM duty-time counter.
+static LED_PWM_COUNTER: AtomicU16 = AtomicU16::new(0);
 
 #[entry]
 fn main() -> ! {
@@ -163,7 +182,7 @@ fn main() -> ! {
     let timer_interrupt = timer.interrupt();
 
     timer.enable_interrupt(timer::Event::Update);
-    timer.start(WAKE_UP_EVERY_US.microseconds());
+    timer.start(TIM2_WAKE_UP_EVERY_US.microseconds());
 
     // Put the timer in the global context.
     critical_section::with(|cs| {
@@ -250,9 +269,6 @@ fn main() -> ! {
         // .self_powered(false)
         .build();
 
-    let mut curr = 0;
-    let mut led_state = FlipFlop::Flip;
-
     // Run a bit of welcoming logic.
     identify_compass(&mut compass);
     identify_gyro(&mut gyro);
@@ -269,6 +285,9 @@ fn main() -> ! {
     let characteristics = gyro.characteristics().unwrap();
     sensor_buffer.update_gyro_characteristics(characteristics);
 
+    // The PWM duty cycles for each LED
+    let led_duty_cycles: [u16; 8] = [u16::MAX, u16::MAX / 2, 0, 0, 0, u16::MAX / 4, 0, 4096];
+
     let mut previous = Byot::now();
     let mut last_ident_send = Byot::now();
     loop {
@@ -280,6 +299,18 @@ fn main() -> ! {
         } else {
             false
         };
+
+        let led_duty_cycle_count = u32::from(LED_PWM_COUNTER.load(Ordering::Acquire));
+
+        for i in 0..led_duty_cycles.len() {
+            let on_time = u32::from(led_duty_cycles[i]) * TIM2_TICKS_PER_LED_PWM_PERIOD
+                / u32::from(LED_PWM_DUTY_CYCLE_MAX);
+            if led_duty_cycle_count < on_time {
+                leds[i].on().ok();
+            } else {
+                leds[i].off().ok();
+            }
+        }
 
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
@@ -323,22 +354,7 @@ fn main() -> ! {
             handle_gyroscope_data(&mut gyro, &mut sensor_buffer);
         }
 
-        if UPDATE_LED_ROULETTE.swap(false, Ordering::Acquire) {
-            match led_state {
-                FlipFlop::Flip => {
-                    let next = (curr + 1) % 8;
-                    leds[next].on().ok();
-                    led_state = FlipFlop::Flop(curr);
-                    curr = next;
-                }
-                FlipFlop::Flop(curr) => {
-                    leds[curr].off().ok();
-                    led_state = FlipFlop::Flip;
-                }
-            }
-        }
-
-        // Onlyl send sensor identifications every once in a while.
+        // Only send sensor identifications every once in a while.
         if now.whole_seconds_since(&last_ident_send) >= 10 {
             last_ident_send = now;
             sensor_buffer.send_identification_data();
@@ -546,14 +562,6 @@ fn log_spi_error(err: spi::Error) {
     }
 }
 
-/// LED flip-flop state machine.
-enum FlipFlop {
-    /// Turns on the next LED.
-    Flip,
-    /// Turns off the specified LED (index).
-    Flop(usize),
-}
-
 /// Hardfault handler.
 ///
 /// Terminates the application and makes a semihosting-capable debug tool exit
@@ -573,8 +581,20 @@ pub fn wait_for_interrupt() {
 
 #[interrupt]
 fn TIM2() {
+    // A bit of silly counter logic. Legacy.
     static mut COUNT: u32 = 0;
-    const LED_UPDATE_COUNT: u32 = DRIVE_LED_EVERY_MS.div(WAKE_UP_EVERY_US);
+    const LED_UPDATE_COUNT: u32 = DRIVE_LED_EVERY_MS.div(TIM2_WAKE_UP_EVERY_US);
+
+    // Increment the counter based on our selected frequency.
+    // Trivially: At a timer frequency of 2 kHz, this will reach 2000 in one second.
+    // The value is delayed by one count, but that shouldn't matter.
+    TIM2_COUNTER.fetch_add(1, Ordering::Release);
+
+    // Wrap the counter to each second, e.g. 0..2000 at 2 kHz.
+    let value = LED_PWM_COUNTER.fetch_add(1, Ordering::Release);
+    if u32::from(value) >= TIM2_TICKS_PER_LED_PWM_PERIOD {
+        LED_PWM_COUNTER.store(0, Ordering::Release);
+    }
 
     // Just handle the pending interrupt event.
     critical_section::with(|cs| {
