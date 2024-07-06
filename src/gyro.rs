@@ -89,7 +89,8 @@ impl Gyroscope {
 
         // Requires `PE1` and `EXTI1` to be set up correctly.
         device.enable_data_ready(true)?;
-        device.set_bandwidth(Bandwidth::Narrowest)?;
+        device.set_odr(OutputDataRate::Hz380)?;
+        device.set_bandwidth(Bandwidth::Medium)?;
         device.set_sensitivity(Sensitivity::D500)?;
 
         Ok(Self { l3gd20: device })

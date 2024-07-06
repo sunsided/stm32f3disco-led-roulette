@@ -8,8 +8,9 @@ use core::sync::atomic::{AtomicBool, Ordering};
 
 use accelerometer::RawAccelerometer;
 use cortex_m::asm;
+use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m::peripheral::NVIC;
-use cortex_m_rt::entry;
+use cortex_m_rt::{entry, exception};
 use cortex_m_semihosting::debug;
 use critical_section::Mutex;
 use defmt_rtt as _;
@@ -23,12 +24,14 @@ use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
+use crate::byot::Byot;
 use crate::compass::Compass;
 use crate::gyro::{Gyroscope, GyroscopeChipSelect};
 use crate::leds::Leds;
 use crate::sensor_out_buffer::SensorOutBuffer;
 use crate::utils::{Micros, Millis};
 
+mod byot;
 mod compass;
 mod gyro;
 mod leds;
@@ -82,7 +85,7 @@ fn main() -> ! {
     );
 
     let mut dp = pac::Peripherals::take().unwrap();
-    let _cp = cortex_m::Peripherals::take().unwrap();
+    let mut cp = cortex_m::Peripherals::take().unwrap();
 
     let mut flash = dp.FLASH.constrain();
     let mut rcc = dp.RCC.constrain();
@@ -101,6 +104,18 @@ fn main() -> ! {
         .pclk2(24.MHz())
         .freeze(&mut flash.acr);
     assert!(clocks.usbclk_valid());
+
+    // Configure SysTick
+    let mut syst = cp.SYST;
+    let ticks_per_ms = clocks.sysclk().0 / 1_000; // SysTick ticks per millisecond
+    syst.set_clock_source(SystClkSource::Core);
+    syst.set_reload(ticks_per_ms - 1); // 1 ms interval
+    syst.clear_current();
+    syst.enable_counter();
+    syst.enable_interrupt();
+
+    // A monotonically non-decreasing timer.
+    let _timer = timer::MonoTimer::new(cp.DWT, clocks, &mut cp.DCB);
 
     // Prepare the LEDs.
     let leds = Leds::new(
@@ -260,7 +275,16 @@ fn main() -> ! {
     // TODO: Use TIMER to get proper 10-second timing, or so.
     let mut identification_counter = 0;
 
+    let mut previous_second = 0;
     loop {
+        // Check clock handling.
+        let current_second = Byot::seconds();
+        let current_millis = Byot::subsec_millis();
+        if current_second > previous_second {
+            previous_second = current_second;
+            defmt::info!("The time is now: {}.{}", current_second, current_millis);
+        }
+
         // Must be called at least every 10 ms, i.e. at 100 Hz.
         let usb_has_events = usb_dev.poll(&mut [&mut serial]);
 
@@ -603,4 +627,10 @@ fn EXTI4() {
             defmt::error!("PE4_INT not set up");
         }
     });
+}
+
+// Define the SysTick interrupt handler
+#[exception]
+fn SysTick() {
+    Byot::systick();
 }
